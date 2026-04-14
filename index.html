@@ -970,39 +970,22 @@ async function submitReceive() {
   if(!valid.length) return showErr(err,'請至少填寫一筆有食材名稱和數量的記錄');
   err.style.display='none';
   try {
-    for(const r of valid) {
-      await post({ action:'append', tab:'purchase', data:{
-        '食材名稱':       r.name.trim(),
-        '進貨&生產':      r.type,
-        '日期':           date,
-        '星期':           day,
-        '進貨/生產數量':  parseFloat(r.qty)||0,
-        '入庫商品編號':   r.code,
-        '入庫倉庫':       r.wh,
-        '入庫單位':       r.unit,
-        '入庫規格':       r.spec,
-        'BOM編號':        r.bom,
-        '建檔人員':       user,
-        '簽核':           'N',
-      }});
-    }
-    // 更新庫存：進貨/生產數量加入現有庫存
-    const invItems = valid.filter(r => r.invId);
-    if(invItems.length > 0) {
-      // 計算每個庫存品項的進貨加總
-      const qtyMap = {};
-      invItems.forEach(r => {
-        if(!qtyMap[r.invId]) qtyMap[r.invId] = 0;
-        qtyMap[r.invId] += parseFloat(r.qty)||0;
-      });
-      const updateItems = Object.entries(qtyMap).map(([invId, addQty]) => {
-        const inv = D.inventory.find(x=>x['庫存編號']===invId);
-        const curQty = parseFloat(inv?.['數量'])||0;
-        return { '庫存編號': invId, '今日庫存': curQty + addQty };
-      });
-      await post({ action:'updateInventory', data:{ items: updateItems }});
-    }
-    toast(`送出成功（${valid.length} 筆）並已更新庫存`,'ok');
+    // 使用新的 appendReceiveAndUpdateStock action：一次送出進貨紀錄並同步更新庫存
+    const rows = valid.map(r => ({
+      '食材名稱':       r.name.trim(),
+      '進貨&生產':      r.type,
+      '進貨/生產數量':  parseFloat(r.qty)||0,
+      '入庫商品編號':   r.code,
+      '入庫倉庫':       r.wh,
+      '入庫單位':       r.unit,
+      '入庫規格':       r.spec,
+      'BOM編號':        r.bom,
+      '簽核':           'N',
+      '庫存編號':       r.invId,  // 供後端更新庫存用
+    }));
+    const baseData = { '日期': date, '星期': day, '建檔人員': user };
+    const res = await post({ action:'appendReceiveAndUpdateStock', data:{ rows, baseData }});
+    toast(`進貨送出成功（${res.appended||valid.length} 筆），庫存已更新 ${res.updated||0} 項`,'ok');
     clearRcRows();
     closeBomExpand();
     syncAll();
@@ -1118,11 +1101,13 @@ async function submitTransfer() {
   const base = { '時間':time, '日期':date, '星期':gv('tr-day'), '製單人員':user, '配送人員':driver };
   let count=0;
   try {
+    // 整合成一次 POST：寫配送紀錄 + 扣庫存
+    const rows = [];
     for(const input of fixedRows){
       const tr   = input.closest('tr');
       const from = tr.querySelector('[data-role=from]').value;
       const to   = tr.querySelector('[data-role=to]').value;
-      await post({ action:'append', tab:'delivery', data:{
+      rows.push({
         ...base,
         '商品名稱': input.dataset.name,
         '庫存編號': input.dataset.id,
@@ -1130,11 +1115,11 @@ async function submitTransfer() {
         '轉入倉庫代號': to,
         '數量': parseFloat(input.value),
         '單位': input.dataset.unit,
-      }});
+      });
       count++;
     }
     for(const r of extraValid){
-      await post({ action:'append', tab:'delivery', data:{
+      rows.push({
         ...base,
         '商品名稱': r.name.trim(),
         '庫存編號': r.invId,
@@ -1142,22 +1127,11 @@ async function submitTransfer() {
         '轉入倉庫代號': r.to,
         '數量': parseFloat(r.qty),
         '單位': r.unit,
-      }});
+      });
       count++;
     }
-
-    // 更新庫存：出庫品項扣除數量
-    const fixedUpdates = [...fixedRows].map(input => {
-      const inv = D.inventory.find(x=>x['庫存編號']===input.dataset.id);
-      const curQty = parseFloat(inv?.['數量'])||0;
-      const sendQty = parseFloat(input.value)||0;
-      return { '庫存編號': input.dataset.id, '今日庫存': Math.max(0, curQty - sendQty) };
-    }).filter(x=>x['庫存編號']);
-    if(fixedUpdates.length > 0) {
-      await post({ action:'updateInventory', data:{ items: fixedUpdates }});
-    }
-
-    toast(`配送單送出成功（${count} 筆）並已更新庫存`,'ok');
+    const res = await post({ action:'appendDeliveryAndUpdateStock', data:{ rows, baseData: base }});
+    toast(`配送單送出成功（${count} 筆），庫存已更新 ${res.updated||0} 項`,'ok');
     clearTransferQty();
     syncAll();
   } catch(e) { showErr(err, e.message); }

@@ -199,7 +199,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   <div class="nav-item"   onclick="nav('usage')"     data-p="usage">    <span class="nav-icon">✎</span>每日食材使用</div>
   <div class="nav-sec">紀錄查詢</div>
   <div class="nav-item"   onclick="nav('purchase-log')" data-p="purchase-log"><span class="nav-icon">📋</span>進貨/生產紀錄</div>
-  <div class="nav-item"   onclick="nav('consumption')"  data-p="consumption"> <span class="nav-icon">↺</span>扣料明細</div>
+  <div class="nav-item"   onclick="nav('consumption')"  data-p="consumption"> <span class="nav-icon">↺</span>使用量紀錄</div>
   <div class="nav-item"   onclick="nav('stock-update')" data-p="stock-update"><span class="nav-icon">🔍</span>物料更新紀錄</div>
   <div class="sb-bottom">
     <div class="sync-info" id="sync-info">尚未同步</div>
@@ -289,9 +289,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             <tr>
               <th class="idx">#</th>
               <th style="min-width:80px">類型</th>
-              <th style="min-width:180px">食材名稱 *</th>
+              <th style="min-width:200px">食材名稱 *</th>
               <th style="min-width:85px">商品編號</th>
-              <th style="min-width:70px">倉庫代碼</th>
               <th style="min-width:75px;text-align:right">數量 *</th>
               <th style="min-width:65px">單位</th>
               <th style="min-width:85px">規格</th>
@@ -356,7 +355,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             <tr>
               <th>商品名稱</th><th class="r">配送數量</th><th>單位</th>
               <th class="r">現有庫存</th><th>規格</th><th>庫存編號</th>
-              <th class="r">項次</th><th>出庫倉庫</th><th>入庫倉庫</th>
+              <th class="r">項次</th><th>出庫倉庫</th><th>入庫倉庫</th><th style="width:36px"></th>
             </tr>
           </thead>
           <tbody id="tr-body"><tr><td colspan="9" class="empty-st">請先選擇出庫倉庫以載入清單</td></tr></tbody>
@@ -422,7 +421,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
               <th>商品名稱</th>
               <th class="r" style="min-width:110px">今日庫存（輸入）</th>
               <th class="r">消耗量（自動）</th><th>單位</th>
-              <th class="r">昨日庫存</th><th>規格</th><th>商品編號</th><th class="r">項次</th>
+              <th class="r">昨日庫存</th><th>規格</th><th>商品編號</th><th class="r">項次</th><th style="width:36px"></th>
             </tr>
           </thead>
           <tbody id="us-body"><tr><td colspan="8" class="empty-st">請先選擇倉庫以載入清單</td></tr></tbody>
@@ -475,28 +474,32 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <div class="tw">
         <table class="dt">
           <thead>
-            <tr><th>食材名稱</th><th>生產&amp;進貨</th><th>星期</th><th>日期</th><th>時間</th><th>建檔人員</th></tr>
+            <tr><th>食材名稱</th><th>進貨&amp;生產</th><th class="r">數量</th><th>建檔時間</th><th>星期</th><th>日期</th><th>建檔人員</th></tr>
           </thead>
-          <tbody id="pl-body"><tr><td colspan="6" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+          <tbody id="pl-body"><tr><td colspan="7" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
         </table>
       </div>
       <div class="pgn" id="pl-pgn"></div>
     </div>
 
-    <!-- ══════════════ 消耗紀錄 ══════════════ -->
+    <!-- ══════════════ 使用量紀錄 ══════════════ -->
     <div class="page" id="page-consumption">
       <div class="filter-bar">
-        <input type="text" id="co-q" placeholder="搜尋商品名稱..." oninput="filterCo()">
+        <input type="text" id="co-q" placeholder="篩選商品名稱（可統計範圍內消耗量）..." oninput="filterCo()" style="min-width:260px">
         <input type="date" id="co-df" onchange="filterCo()">
         <input type="date" id="co-dt" onchange="filterCo()">
       </div>
+      <!-- 商品名稱篩選時顯示統計 -->
+      <div id="co-summary" style="display:none;background:var(--accent-l);border:1px solid var(--accent-m);border-radius:var(--r);padding:10px 16px;margin-bottom:10px;font-size:13px"></div>
       <div class="tw">
         <table class="dt">
           <thead>
-            <tr><th>日期</th><th>星期</th><th>庫存編號</th><th>商品名稱</th>
-            <th class="r">消耗數量</th><th>單位</th><th>規格</th></tr>
+            <tr>
+              <th>日期</th><th>星期</th><th>時間</th><th>建檔人員</th>
+              <th>商品名稱</th><th class="r">消耗數量</th><th>單位</th><th>規格</th><th>庫存編號</th>
+            </tr>
           </thead>
-          <tbody id="co-body"><tr><td colspan="7" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+          <tbody id="co-body"><tr><td colspan="9" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
         </table>
       </div>
       <div class="pgn" id="co-pgn"></div>
@@ -505,7 +508,13 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <!-- ══════════════ 物料更新紀錄 ══════════════ -->
     <div class="page" id="page-stock-update">
       <div class="filter-bar">
-        <input type="text" id="su-q" placeholder="搜尋商品名稱、倉庫編號..." oninput="filterSU()">
+        <input type="text" id="su-q" placeholder="搜尋商品名稱..." oninput="filterSU()">
+        <select id="su-wh" onchange="filterSU()">
+          <option value="">全部倉庫</option>
+          <option value="195">195</option>
+          <option value="317">317</option>
+          <option value="大野">大野</option>
+        </select>
         <input type="date" id="su-df" onchange="filterSU()">
         <input type="date" id="su-dt" onchange="filterSU()">
       </div>
@@ -513,11 +522,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
         <table class="dt">
           <thead>
             <tr>
-              <th>日期時間</th><th class="r">更新筆數</th><th>倉庫編號</th>
-              <th>商品名稱</th><th class="r">舊的數量</th><th class="r">新的數量</th>
+              <th>日期時間（台灣）</th><th>倉庫</th>
+              <th>商品名稱</th><th class="r">舊數量</th><th class="r">新數量</th>
             </tr>
           </thead>
-          <tbody id="su-body"><tr><td colspan="6" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+          <tbody id="su-body"><tr><td colspan="5" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
         </table>
       </div>
       <div class="pgn" id="su-pgn"></div>
@@ -536,6 +545,15 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 let API = localStorage.getItem('inv_api') || '';
 const PS = 100;
 const DAYS = ['日','一','二','三','四','五','六'];
+// 倉庫代碼清單（固定三個）
+const WH_CODES = ['195','317','大野'];
+
+// 數量格式化：最多2位小數，尾零不顯示
+function fmtQty(v) {
+  const n = parseFloat(v);
+  if (isNaN(n)) return '—';
+  return parseFloat(n.toFixed(2)).toString();
+}
 
 let D = {
   inventory:[], purchase:[], delivery:[], usageLog:[], bom:[], consumption:[], stockUpdate:[]
@@ -549,7 +567,7 @@ const PAGE_META = {
   transfer:     ['倉庫配送',        '固定清單批次填寫配送數量'],
   usage:        ['每日食材使用',    '固定清單批次填寫每日消耗量'],
   'purchase-log':['進貨/生產紀錄', '歷史進貨與生產記錄'],
-  consumption:  ['扣料明細',        '歷史消耗扣料記錄'],
+  consumption:  ['使用量紀錄',      '依日期查看每日食材使用消耗，可按商品名稱統計']
   'stock-update':['物料更新紀錄',  '庫存數量異動追蹤，供異常查詢用'],
 };
 
@@ -661,12 +679,11 @@ function renderAll() {
 // ═══════════════════════════════════════
 function buildDropdowns() {
   const whs  = [...new Set(D.inventory.map(r => String(r['倉庫名稱']||'').trim()).filter(Boolean))];
-  const wh2  = [...new Set(D.inventory.map(r => String(r['倉庫代碼']||r['倉庫名稱']||'').trim()).filter(Boolean))];
-  const codes= [...new Set([...whs,...wh2])];
 
   setOpts('inv-wh',  whs.map(w=>[w,w]), '全部倉庫');
-  setOpts('tr-default-from', codes.map(w=>[w,w]),'— 選擇出庫倉庫 —');
-  setOpts('tr-default-to',   codes.map(w=>[w,w]),'— 選擇入庫倉庫 —');
+  // 出入庫倉庫固定使用 195、317、大野 三個代碼
+  setOpts('tr-default-from', WH_CODES.map(w=>[w,w]),'— 選擇出庫倉庫 —');
+  setOpts('tr-default-to',   WH_CODES.map(w=>[w,w]),'— 選擇入庫倉庫 —');
   setOpts('us-wh',   whs.map(w=>[w,w]), '— 選擇倉庫 —');
   setOpts('pr-wh',   whs.map(w=>[w,w]), '— 選擇倉庫 —');
   setOpts('rc-filter-wh', whs.map(w=>[w,w]), '— 選擇倉庫 —');
@@ -805,10 +822,10 @@ function renderInv() {
     const qtyCls = st==='danger' ? 'qty-danger' : 'qty-cell';
     const stBadge= st==='danger' ? '<span class="badge danger">低庫存</span>' : st==='zero' ? '<span class="badge gray">零庫存</span>' : '';
     const qtyCell = invEditMode
-      ? `<input type="number" step="0.01" value="${qty}" data-id="${r['庫存編號']}" data-orig="${qty}"
+      ? `<input type="number" step="0.01" value="${fmtQty(qty)}" data-id="${r['庫存編號']}" data-orig="${fmtQty(qty)}"
            style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--accent-m);border-radius:4px;font-size:13px;font-family:var(--mono);font-weight:600;background:#f0f8f4"
            oninput="this.closest('tr').classList.add('changed')">`
-      : `<span class="${qtyCls}">${qty}</span>`;
+      : `<span class="${qtyCls}">${fmtQty(qty)}</span>`;
     return `<tr class="${rowCls}">
       <td>${r['倉庫名稱']||'—'}</td>
       <td><strong>${r['商品名稱']||'—'}</strong></td>
@@ -816,8 +833,8 @@ function renderInv() {
       <td class="dim">${r['單位']||'—'}</td>
       <td class="r mono dim">${r['項次']||i+1}</td>
       <td class="dim mono">${r['規格']||'—'}</td>
-      <td class="r dim">${con||'—'}</td>
-      <td class="r dim">${safe||'—'}</td>
+      <td class="r dim">${con ? fmtQty(con) : '—'}</td>
+      <td class="r dim">${safe ? fmtQty(safe) : '—'}</td>
       <td>${stBadge}</td>
       <td class="mono dim">${r['庫存編號']||'—'}</td>
     </tr>`;
@@ -882,7 +899,6 @@ function renderRcRows() {
         </select>
       </td>
       <td><input value="${r.code}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
-      <td><input value="${r.wh}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
       <td><input type="number" value="${r.qty}" min="0" step="0.01" style="text-align:right;font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%" oninput="updateRcRow(${r.id},'qty',this.value)" placeholder="0"></td>
       <td><input value="${r.unit}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
       <td><input value="${r.spec}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
@@ -1000,7 +1016,9 @@ async function submitReceive() {
       '簽核':           'N',
       '庫存編號':       r.invId,  // 供後端更新庫存用
     }));
-    const baseData = { '日期': date, '星期': day, '建檔人員': user };
+    const twNow2 = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+    const recTime = twNow2.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    const baseData = { '日期': date, '星期': day, '建檔人員': user, '建檔時間': recTime };
     const res = await post({ action:'appendReceiveAndUpdateStock', data:{ rows, baseData }});
     toast(`進貨送出成功（${res.appended||valid.length} 筆），庫存已更新 ${res.updated||0} 項`,'ok');
     clearRcRows();
@@ -1019,14 +1037,19 @@ function rebuildTransferList() {
   const to   = gv('tr-default-to');
   if(!from){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">請先選擇出庫倉庫</td></tr>`; return; }
 
+  // 以倉庫代碼 or 倉庫名稱 比對，支援 195/317/大野
   const items = D.inventory
-    .filter(r => String(r['倉庫代碼']||r['倉庫名稱']||'').trim() == from.trim() || String(r['倉庫名稱']||'').trim() == from.trim())
+    .filter(r => {
+      const code = String(r['倉庫代碼']||'').trim();
+      const name = String(r['倉庫名稱']||'').trim();
+      return code === from || name === from || name.includes(from) || code.includes(from);
+    })
     .sort((a,b)=> (parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
 
   if(!items.length){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }
 
-  const whs    = [...new Set(D.inventory.map(r=>r['倉庫名稱']||r['倉庫代碼']).filter(Boolean))];
-  const whOpts = whs.map(w=>`<option value="${w}" ${w==to?'selected':''}>${w}</option>`).join('');
+  // 入庫倉庫下拉固定 WH_CODES
+  const whOpts = WH_CODES.map(w=>`<option value="${w}" ${w===to?'selected':''}>${w}</option>`).join('');
 
   g('tr-body').innerHTML = items.map((r,i)=>{
     const qty = parseFloat(r['數量'])||0;
@@ -1037,11 +1060,11 @@ function rebuildTransferList() {
       <td class="editable">
         <input type="number" min="0" step="0.01" placeholder="0"
           style="width:90px;text-align:right;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;font-size:13px"
-          data-id="${r['庫存編號']}" data-name="${r['商品名稱']}" data-unit="${r['單位']||''}"
-          oninput="this.closest('tr').classList.toggle('changed',this.value>0)">
+          data-id="${r['庫存編號']}" data-code="${r['商品編號']||''}" data-name="${r['商品名稱']}" data-unit="${r['單位']||''}"
+          oninput="this.closest('tr').classList.toggle('changed',parseFloat(this.value)>0)">
       </td>
       <td class="dim">${r['單位']||'—'}</td>
-      <td class="r ${qc}">${qty}</td>
+      <td class="r ${qc}">${fmtQty(qty)}</td>
       <td class="dim mono">${r['規格']||'—'}</td>
       <td class="mono">${r['庫存編號']||'—'}</td>
       <td class="r mono dim">${r['項次']||i+1}</td>
@@ -1052,9 +1075,10 @@ function rebuildTransferList() {
       </td>
       <td>
         <select style="font-size:12px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px" data-role="to">
-          <option value="">${to?'':' — '}</option>${whOpts}
+          ${WH_CODES.map(w=>`<option value="${w}" ${w===to?'selected':''}>${w}</option>`).join('')}
         </select>
       </td>
+      <td><button class="del-btn" title="從清單移除" onclick="removeTrRow('${r['庫存編號']}')">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -1070,9 +1094,8 @@ function addTrExtra() {
 
 function renderTrExtra() {
   const units = [...new Set(D.inventory.map(r=>r['單位']).filter(Boolean))];
-  const whs   = [...new Set(D.inventory.map(r=>r['倉庫名稱']||r['倉庫代碼']).filter(Boolean))];
   const uOpts = units.map(u=>`<option value="${u}">${u}</option>`).join('');
-  const wOpts = whs.map(w=>`<option value="${w}">${w}</option>`).join('');
+  const wOpts = WH_CODES.map(w=>`<option value="${w}">${w}</option>`).join('');
   g('tr-extra-body').innerHTML = trExtraRows.map((r,i)=>`
     <tr id="tex-${r.id}">
       <td class="idx">${i+1}</td>
@@ -1094,12 +1117,30 @@ function renderTrExtra() {
   });
 }
 
+// 從配送固定清單移除單列（不影響 D.inventory，只移除 DOM 列）
+let trRemovedIds = new Set();
+function removeTrRow(invId) {
+  trRemovedIds.add(invId);
+  const row = document.getElementById('trr-' + invId);
+  if (row) row.remove();
+}
+
+// 從每日食材使用固定清單移除單列
+let usRemovedIds = new Set();
+function removeUsRow(invId) {
+  usRemovedIds.add(invId);
+  const row = document.getElementById('usr-' + invId);
+  if (row) row.remove();
+}
+
 function updTrExtra(id,key,val){ const r=trExtraRows.find(x=>x.id===id); if(r) r[key]=val; }
 function delTrExtra(id){ trExtraRows=trExtraRows.filter(x=>x.id!==id); renderTrExtra(); }
 
 function clearTransferQty() {
-  document.querySelectorAll('#tr-body input[type=number]').forEach(i=>{ i.value=''; i.closest('tr').classList.remove('changed'); });
-  trExtraRows=[]; renderTrExtra();
+  trRemovedIds = new Set();
+  trExtraRows = [];
+  rebuildTransferList();
+  renderTrExtra();
 }
 
 async function submitTransfer() {
@@ -1126,12 +1167,13 @@ async function submitTransfer() {
       const to   = tr.querySelector('[data-role=to]').value;
       rows.push({
         ...base,
-        '商品名稱': input.dataset.name,
-        '庫存編號': input.dataset.id,
+        '商品名稱':     input.dataset.name,
+        '庫存編號':     input.dataset.id,
+        '商品編號':     input.dataset.code,
         '轉出倉庫代號': from,
         '轉入倉庫代號': to,
-        '數量': parseFloat(input.value),
-        '單位': input.dataset.unit,
+        '數量':         parseFloat(input.value),
+        '單位':         input.dataset.unit,
       });
       count++;
     }
@@ -1168,7 +1210,7 @@ function rebuildUsageList() {
   if(!items.length){ g('us-body').innerHTML=`<tr><td colspan="8" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }
 
   g('us-body').innerHTML = items.map((r,i)=>{
-    const yest = parseFloat(r['數量'])||0;   // 昨日庫存 = 目前 Sheets 上的數量
+    const yest = parseFloat(r['數量'])||0;
     const st   = stockStatus(r);
     const qc   = st==='danger'?'qty-danger':st==='warn'?'qty-low':'qty-cell';
     const rowCls = st==='danger'?'danger-row':st==='warn'?'warn-row':'';
@@ -1184,10 +1226,11 @@ function rebuildUsageList() {
       </td>
       <td class="r mono" id="cons-${r['庫存編號']}" style="font-weight:600;color:var(--text2)">—</td>
       <td class="dim">${r['單位']||'—'}</td>
-      <td class="r ${qc}">${yest}</td>
+      <td class="r ${qc}">${fmtQty(yest)}</td>
       <td class="dim mono">${r['規格']||'—'}</td>
       <td class="mono dim">${r['商品編號']||'—'}</td>
       <td class="r mono dim">${r['項次']||i+1}</td>
+      <td><button class="del-btn" title="移除此列" onclick="removeUsRow('${r['庫存編號']}')">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -1246,13 +1289,10 @@ function onUsageTodayInput(input) {
 }
 
 function clearUsageQty() {
-  document.querySelectorAll('#us-body input[type=number]').forEach(i=>{
-    i.value='';
-    i.closest('tr').classList.remove('changed');
-    const consEl = g('cons-' + i.dataset.id);
-    if(consEl) { consEl.textContent='—'; consEl.style.color='var(--text2)'; }
-  });
-  usExtraRows=[]; renderUsExtra();
+  usRemovedIds = new Set();
+  usExtraRows = [];
+  rebuildUsageList();
+  renderUsExtra();
 }
 
 async function submitUsage() {
@@ -1351,27 +1391,31 @@ function renderPL() {
   g('pl-body').innerHTML = slice.length ? slice.map(r=>{
     const tp = r['進貨&生産']||r['進貨&生產']||'';
     const tB = tp==='進貨'?'<span class="badge info">進貨</span>':tp==='生產'?'<span class="badge ok">生產</span>':`<span class="badge gray">${tp||'—'}</span>`;
+    const qty = r['進貨/生產數量']??r['數量']??'';
+    // 建檔時間：取 日期時間 欄或 時間 欄
+    const recTime = r['建檔時間']||r['日期時間']||r['時間']||'—';
     return `<tr>
       <td><strong>${r['食材名稱']||'—'}</strong></td>
       <td>${tB}</td>
+      <td class="r mono">${qty!==''?fmtQty(qty):'—'}</td>
+      <td class="mono dim">${recTime}</td>
       <td class="dim">${r['星期']||'—'}</td>
       <td class="mono">${String(r['日期']||'').slice(0,10)||'—'}</td>
-      <td class="mono dim">${r['時間']||'—'}</td>
       <td class="dim">${r['建檔人員']||'—'}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="6" class="empty-st">無符合條件的資料</td></tr>`;
+  }).join('') : `<tr><td colspan="7" class="empty-st">無符合條件的資料</td></tr>`;
   mkPgn('pl-pgn',rows.length,PG.purchase,n=>{PG.purchase=n;renderPL();});
 }
 
 // ═══════════════════════════════════════
-// CONSUMPTION
+// CONSUMPTION (使用量紀錄)
 // ═══════════════════════════════════════
 function filterCo() {
-  const q  = gv('co-q').toLowerCase();
+  const q  = gv('co-q').toLowerCase().trim();
   const df = gv('co-df');
   const dt = gv('co-dt');
   F.consumption = D.consumption.filter(r=>{
-    if(q && !(`${r['商品名稱']||''} ${r['庫存編號']||''}`).toLowerCase().includes(q)) return false;
+    if(q && !(r['商品名稱']||'').toLowerCase().includes(q)) return false;
     const d=String(r['日期']||'').slice(0,10);
     if(df&&d<df) return false;
     if(dt&&d>dt) return false;
@@ -1382,30 +1426,102 @@ function filterCo() {
 
 function renderCo() {
   const rows = F.consumption;
-  const slice= rows.slice((PG.consumption-1)*PS, PG.consumption*PS);
-  g('co-body').innerHTML = slice.length ? slice.map(r=>`<tr>
-    <td class="mono">${String(r['日期']||'').slice(0,10)||'—'}</td>
-    <td class="dim">${r['星期']||'—'}</td>
-    <td class="mono dim">${r['庫存編號']||'—'}</td>
-    <td>${r['商品名稱']||'—'}</td>
-    <td class="r">${r['消耗數量']??'—'}</td>
-    <td class="dim">${r['單位']||'—'}</td>
-    <td class="dim mono">${r['規格']||'—'}</td>
-  </tr>`).join('') : `<tr><td colspan="7" class="empty-st">無符合條件的資料</td></tr>`;
+  const q = gv('co-q').toLowerCase().trim();
+
+  // 商品名稱篩選時顯示統計總量
+  const summaryEl = g('co-summary');
+  if(q && rows.length > 0) {
+    const totals = {};
+    rows.forEach(r => {
+      const name = r['商品名稱']||'未知';
+      const unit = r['單位']||'';
+      const key  = name + '|' + unit;
+      if(!totals[key]) totals[key] = { name, unit, total:0 };
+      totals[key].total += parseFloat(r['消耗數量'])||0;
+    });
+    const parts = Object.values(totals).map(t=>`<strong>${t.name}</strong>：${fmtQty(t.total)} ${t.unit}`).join('　　');
+    summaryEl.innerHTML = `📊 篩選範圍內消耗統計　${parts}`;
+    summaryEl.style.display = '';
+  } else {
+    summaryEl.style.display = 'none';
+  }
+
+  // 按日期分組，同一天只顯示一列日期標題，其下列出所有品項
+  const slice = rows.slice((PG.consumption-1)*PS, PG.consumption*PS);
+  let lastDate = null;
+  const html = slice.map(r => {
+    const date  = String(r['日期']||'').slice(0,10)||'—';
+    const time  = r['建檔時間']||r['日期時間']||r['時間']||'—';
+    const user  = r['建檔人員']||'—';
+    const week  = r['星期']||'—';
+    let dateRow = '';
+    if(date !== lastDate) {
+      lastDate = date;
+      dateRow = `<tr style="background:var(--surface2)">
+        <td class="mono" style="font-weight:700">${date}</td>
+        <td class="dim">（${week}）</td>
+        <td class="dim">${time}</td>
+        <td class="dim" style="font-size:11px">${user}</td>
+        <td colspan="5" style="color:var(--text3);font-size:11px">↓ 以下為當日品項</td>
+      </tr>`;
+    }
+    return dateRow + `<tr>
+      <td style="padding-left:20px"></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>${r['商品名稱']||'—'}</td>
+      <td class="r mono" style="font-weight:600;color:var(--accent)">${fmtQty(r['消耗數量'])}</td>
+      <td class="dim">${r['單位']||'—'}</td>
+      <td class="dim mono">${r['規格']||'—'}</td>
+      <td class="mono dim" style="font-size:11px">${r['庫存編號']||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  g('co-body').innerHTML = html || `<tr><td colspan="9" class="empty-st">無符合條件的資料</td></tr>`;
   mkPgn('co-pgn',rows.length,PG.consumption,n=>{PG.consumption=n;renderCo();});
 }
 
 // ═══════════════════════════════════════
 // STOCK UPDATE LOG
 // ═══════════════════════════════════════
+// 正規化倉庫代碼：含195→195, 含317→317, 含大野→大野
+function normalizeWh(raw) {
+  const s = String(raw||'').trim();
+  if(s.includes('195')) return '195';
+  if(s.includes('317')) return '317';
+  if(s.includes('大野')) return '大野';
+  return s;
+}
+
 function filterSU() {
   const q  = gv('su-q').toLowerCase();
+  const wh = gv('su-wh');
   const df = gv('su-df');
   const dt = gv('su-dt');
-  F.stockUpdate = D.stockUpdate.filter(r=>{
+
+  // 先正規化並去除5分鐘內重複（同商品名稱+同倉庫）
+  const seen = new Map(); // key: whCode|name|5minBucket → keep first
+  const deduped = D.stockUpdate.filter(r => {
+    const rawWh  = r['倉庫編號']||r['倉庫代碼']||r['倉庫名稱']||'';
+    const whCode = normalizeWh(rawWh);
+    const name   = String(r['商品名稱']||'');
+    const dtStr  = String(r['日期時間']||r['日期']||'');
+    // 5分鐘 bucket：把時間截到 5 分鐘精度
+    const mins   = dtStr.slice(0,16).replace(/\D/g,'');
+    const bucket = mins ? Math.floor(parseInt(mins)/5) : 0;
+    const key    = `${whCode}|${name}|${bucket}`;
+    if(seen.has(key)) return false;
+    seen.set(key, true);
+    // 把正規化代碼寫回臨時欄（不改原資料）
+    r._whCode = whCode;
+    return true;
+  });
+
+  F.stockUpdate = deduped.filter(r=>{
     const name = (r['商品名稱']||'').toLowerCase();
-    const wh   = (r['倉庫編號']||r['倉庫名稱']||'').toLowerCase();
-    if(q && !name.includes(q) && !wh.includes(q)) return false;
+    if(q && !name.includes(q)) return false;
+    if(wh && r._whCode !== wh) return false;
     const d = String(r['日期時間']||r['日期']||'').slice(0,10);
     if(df && d<df) return false;
     if(dt && d>dt) return false;
@@ -1418,21 +1534,23 @@ function renderSU() {
   const rows  = F.stockUpdate;
   const slice = rows.slice((PG.stockUpdate-1)*PS, PG.stockUpdate*PS);
   g('su-body').innerHTML = slice.length ? slice.map(r=>{
-    const oldQ = parseFloat(r['舊的數量']??r['舊數量']);
-    const newQ = parseFloat(r['新的數量']??r['新數量']);
-    const diff = (!isNaN(oldQ)&&!isNaN(newQ)) ? newQ-oldQ : null;
-    const diffStr = diff===null ? '—' :
-      diff>0 ? `<span style="color:var(--accent)">+${diff}</span>` :
-      diff<0 ? `<span style="color:var(--danger)">${diff}</span>` : '0';
+    const oldQ  = parseFloat(r['舊的數量']??r['舊數量']);
+    const newQ  = parseFloat(r['新的數量']??r['新數量']);
+    const diff  = (!isNaN(oldQ)&&!isNaN(newQ)) ? newQ-oldQ : null;
+    const diffD = diff===null ? '' :
+      diff>0 ? `<span style="color:var(--accent);font-size:11px">▲${fmtQty(diff)}</span>` :
+      diff<0 ? `<span style="color:var(--danger);font-size:11px">▼${fmtQty(Math.abs(diff))}</span>` : '';
+    const whCode = r._whCode || normalizeWh(r['倉庫編號']||r['倉庫代碼']||r['倉庫名稱']||'');
+    // 日期時間顯示：直接顯示 GAS 回傳字串（已是台灣時間）
+    const dtDisplay = String(r['日期時間']||r['日期']||'—').slice(0,16);
     return `<tr>
-      <td class="mono">${r['日期時間']||r['日期']||'—'}</td>
-      <td class="r mono">${r['更新筆數']??'—'}</td>
-      <td class="mono dim">${r['倉庫編號']||r['倉庫名稱']||'—'}</td>
+      <td class="mono">${dtDisplay}</td>
+      <td class="mono dim" style="text-align:center">${whCode||'—'}</td>
       <td><strong>${r['商品名稱']||'—'}</strong></td>
-      <td class="r mono">${isNaN(oldQ)?'—':oldQ}</td>
-      <td class="r mono">${isNaN(newQ)?'—':newQ} ${diffStr}</td>
+      <td class="r mono">${isNaN(oldQ)?'—':fmtQty(oldQ)}</td>
+      <td class="r mono">${isNaN(newQ)?'—':fmtQty(newQ)} ${diffD}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="6" class="empty-st">無符合條件的資料</td></tr>`;
+  }).join('') : `<tr><td colspan="5" class="empty-st">無符合條件的資料</td></tr>`;
   mkPgn('su-pgn',rows.length,PG.stockUpdate,n=>{PG.stockUpdate=n;renderSU();});
 }
 

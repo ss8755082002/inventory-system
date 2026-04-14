@@ -613,8 +613,16 @@ async function fetchTab(tab) {
   return d.rows || [];
 }
 async function post(payload) {
-  const r = await fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-  const d = await r.json();
+  // GAS Web App 不支援 CORS preflight（OPTIONS）。
+  // 使用 text/plain 避免瀏覽器送出 preflight，GAS 的 e.postData.contents 仍可正常讀取 JSON。
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  const text = await r.text();
+  let d;
+  try { d = JSON.parse(text); } catch(err) { throw new Error('回應格式錯誤：' + text.slice(0,200)); }
   if (d.error) throw new Error(d.error);
   return d;
 }
@@ -664,7 +672,11 @@ function buildDropdowns() {
   setOpts('rc-filter-wh', whs.map(w=>[w,w]), '— 選擇倉庫 —');
 
   const bomProds = [...new Map(D.bom.map(r=>[r['BOM編號'],r])).values()];
-  setOpts('pr-bom', bomProds.map(r=>[r['BOM編號'], `${r['BOM編號']} ${r['物料名稱']||''}`]),'— 選擇 BOM —');
+  const getBomLabelDD = r => {
+    const name = r['成品名稱'] || r['BOM名稱'] || r['產品名稱'] || r['物料名稱'] || '';
+    return `${r['BOM編號']}　${name}`;
+  };
+  setOpts('pr-bom', bomProds.map(r=>[r['BOM編號'], getBomLabelDD(r)]),'— 選擇 BOM —');
 
   // 人員下拉（所有頁面共用）
   initPeopleDropdowns();
@@ -845,7 +857,12 @@ function renderRcRows() {
   const items  = getRcFilteredItems().sort((a,b)=>(parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
   const nameOpts = items.map(r=>`<option value="${r['庫存編號']}">${r['商品名稱']||''} (${r['庫存編號']||''})</option>`).join('');
   const bomIds = [...new Map(D.bom.map(r=>[r['BOM編號'],r])).values()];
-  const bOpts  = bomIds.map(r=>`<option value="${r['BOM編號']}">${r['BOM編號']} ${r['物料名稱']||''}</option>`).join('');
+  // BOM成品名稱：依序嘗試可能的欄位名稱
+  const getBomLabel = r => {
+    const name = r['成品名稱'] || r['BOM名稱'] || r['產品名稱'] || r['物料名稱'] || '';
+    return `${r['BOM編號']}　${name}`;
+  };
+  const bOpts  = bomIds.map(r=>`<option value="${r['BOM編號']}">${getBomLabel(r)}</option>`).join('');
 
   g('rc-body').innerHTML = rcRows.map((r,i) => {
     const isProd = r.type === '生產';
@@ -930,7 +947,7 @@ function expandBom(rowId) {
   const base  = parseFloat(lines[0]['生產數量'])||1;
   const qty   = parseFloat(r.qty)||1;
   const ratio = qty/base;
-  g('bom-expand-title').textContent = `${r.bom} ${lines[0]['物料名稱']||''} × ${qty} ${lines[0]['單位']||''}`;
+  g('bom-expand-title').textContent = `${r.bom}　${lines[0]['成品名稱']||lines[0]['BOM名稱']||lines[0]['產品名稱']||lines[0]['物料名稱']||''}　× ${qty} ${lines[0]['單位']||''}`;
   g('bom-expand-body').innerHTML = lines.map((l,i)=>{
     const calc = ((parseFloat(l['用量'])||0)*ratio).toFixed(4);
     return `<tr>

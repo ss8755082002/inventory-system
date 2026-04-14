@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>庫存管理系統</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f5f4f0; --surface:#fff; --surface2:#f0efe9; --surface3:#e8e7e0;
+  --border:#e0ded6; --border2:#c8c6bc;
+  --text:#1a1916; --text2:#6b6960; --text3:#a8a79f;
+  --accent:#2a5a3b; --accent-l:#e6f2eb; --accent-m:#4a8a62;
+  --danger:#c0392b; --danger-l:#fdf0ee;
+  --warn:#b8770a; --warn-l:#fef8ec;
+  --info:#1a5276; --info-l:#eaf0f8;
+  --purple:#5b3fa0; --purple-l:#f0ecfa;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'Noto Sans TC',sans-serif;
+  --r:6px; --r2:10px; --r3:14px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
+.app{display:flex;min-height:100vh}
+
+/* ── Sidebar ── */
+.sidebar{width:210px;background:#1a1916;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0}
+.sb-logo{padding:20px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-logo .name{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fff}
+.sb-logo .ver{font-size:10px;color:rgba(255,255,255,.3);font-family:var(--mono);margin-top:2px}
+.nav-sec{padding:16px 12px 5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.28)}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 13px;margin:1px 7px;border-radius:var(--r);cursor:pointer;font-size:12.5px;color:rgba(255,255,255,.6);transition:all .15s;user-select:none}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.on{background:var(--accent-m);color:#fff;font-weight:500}
+.nav-icon{width:16px;text-align:center;font-size:13px;flex-shrink:0}
+.sb-bottom{margin-top:auto;padding:12px 14px;border-top:1px solid rgba(255,255,255,.07)}
+.sync-info{font-size:10px;color:rgba(255,255,255,.28);font-family:var(--mono);margin-bottom:7px}
+.btn-resync{width:100%;padding:6px;border:1px solid rgba(255,255,255,.14);border-radius:var(--r);background:transparent;color:rgba(255,255,255,.55);font-size:12px;cursor:pointer;font-family:var(--sans)}
+.btn-resync:hover{background:rgba(255,255,255,.07);color:#fff}
+
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:13px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+.topbar .pg-title{font-size:15px;font-weight:700}
+.topbar .pg-meta{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.topbar-actions{display:flex;gap:8px}
+.content{padding:22px 26px;flex:1;overflow-y:auto}
+.page{display:none}.page.on{display:block}
+
+/* ── Buttons ── */
+.btn{padding:7px 14px;border-radius:var(--r);border:1px solid var(--border2);background:var(--surface);font-size:13px;cursor:pointer;font-family:var(--sans);color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--surface2)}
+.btn.green{background:var(--accent);color:#fff;border-color:var(--accent)}.btn.green:hover{background:var(--accent-m)}
+.btn.blue{background:var(--info);color:#fff;border-color:var(--info)}.btn.blue:hover{background:#1f6391}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn.icon-only{padding:6px 9px}
+.btn-group{display:flex;gap:0}
+.btn-group .btn{border-radius:0}.btn-group .btn:first-child{border-radius:var(--r) 0 0 var(--r)}.btn-group .btn:last-child{border-radius:0 var(--r) var(--r) 0}.btn-group .btn:not(:first-child){border-left:none}
+
+/* ── Config banner ── */
+.cfg-banner{background:var(--warn-l);border:1px solid #e8c560;border-radius:var(--r2);padding:15px 18px;margin-bottom:18px}
+.cfg-row{display:flex;gap:8px;margin-top:9px}
+.cfg-row input{flex:1;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--r);font-family:var(--mono);font-size:12px}
+
+/* ── Section headers ── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sec-title{font-size:13px;font-weight:700;color:var(--text2)}
+
+/* ── Filter bar ── */
+.filter-bar{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.filter-bar input,.filter-bar select{padding:6px 10px;border:1px solid var(--border2);border-radius:var(--r);font-size:13px;background:var(--surface);font-family:var(--sans);color:var(--text)}
+.filter-bar input[type=text]{min-width:170px}
+
+/* ── Table ── */
+.tw{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);overflow:auto}
+.dt{width:100%;border-collapse:collapse;font-size:13px}
+.dt thead{background:var(--surface2)}
+.dt th{padding:8px 12px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap}
+.dt th.r,.dt td.r{text-align:right}
+.dt td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.dt tr:last-child td{border-bottom:none}
+.dt tr:hover td{background:var(--surface2)}
+.dt td.mono{font-family:var(--mono);font-size:12px}
+.dt td.dim{color:var(--text3)}
+
+/* ── Inline editable table ── */
+.dt td.editable input{width:100%;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);text-align:right}
+.dt td.editable input:focus{outline:none;border-color:var(--accent-m);background:#f0f8f4}
+.dt tr.changed td{background:#f0f8f4}
+.dt tr.warn-row td{background:var(--warn-l)}
+.dt tr.danger-row td{background:var(--danger-l)}
+.dt td.qty-cell{font-family:var(--mono);font-weight:600}
+.dt td.qty-low{color:var(--warn);font-weight:700}
+.dt td.qty-danger{color:var(--danger);font-weight:700}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
+.badge.ok{background:var(--accent-l);color:var(--accent)}
+.badge.danger{background:var(--danger-l);color:var(--danger)}
+.badge.warn{background:var(--warn-l);color:var(--warn)}
+.badge.info{background:var(--info-l);color:var(--info)}
+.badge.gray{background:var(--surface2);color:var(--text2)}
+.badge.purple{background:var(--purple-l);color:var(--purple)}
+
+/* ── Submit panel (bottom sticky) ── */
+.submit-panel{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:14px 26px;display:flex;align-items:center;justify-content:space-between;z-index:15}
+.submit-panel .sp-left{font-size:13px;color:var(--text2)}
+.submit-panel .sp-left strong{color:var(--text)}
+
+/* ── Batch input table (config-style) ── */
+.batch-table{width:100%;border-collapse:collapse;font-size:13px}
+.batch-table th{padding:8px 12px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:2px solid var(--border);background:var(--surface2);white-space:nowrap}
+.batch-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.batch-table tr:hover td{background:#fafaf8}
+.batch-table input,.batch-table select{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:var(--sans);color:var(--text)}
+.batch-table input:focus,.batch-table select:focus{outline:none;border-color:var(--accent-m);background:#f0f8f4}
+.batch-table .idx{width:40px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--text3)}
+.batch-table .del-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:2px 6px;border-radius:4px}
+.batch-table .del-btn:hover{color:var(--danger);background:var(--danger-l)}
+.add-row-btn{margin-top:10px;font-size:12px;color:var(--accent);background:none;border:1px dashed var(--accent-m);border-radius:var(--r);padding:6px 14px;cursor:pointer;width:100%}
+.add-row-btn:hover{background:var(--accent-l)}
+
+/* ── Modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--r2);width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.16)}
+.modal-hdr{padding:16px 20px 13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.modal-hdr h2{font-size:14px;font-weight:700}
+.modal-x{background:none;border:none;font-size:17px;cursor:pointer;color:var(--text3);padding:2px 6px;border-radius:var(--r)}
+.modal-x:hover{background:var(--surface2)}
+.modal-body{padding:16px 20px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+
+/* ── Form ── */
+.fg{margin-bottom:13px}
+.fg label{display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.fi{width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--r);font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);transition:border-color .15s}
+.fi:focus{outline:none;border-color:var(--accent-m)}
+.frow2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.ferr{color:var(--danger);font-size:12px;margin-top:6px;display:none}
+.finfo{background:var(--surface2);border-radius:var(--r);padding:9px 12px;font-size:13px;margin-bottom:12px;border-left:3px solid var(--border2)}
+
+/* ── BOM result ── */
+.bom-panel{background:var(--surface2);border-radius:var(--r);padding:12px 14px;margin-top:10px;font-size:13px}
+.bom-rt{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+.bom-rt th,.bom-rt td{padding:6px 10px;border:1px solid var(--border);text-align:left}
+.bom-rt thead{background:#e8e7e0}
+
+/* ── Pagination ── */
+.pgn{display:flex;align-items:center;gap:4px;margin-top:10px;justify-content:flex-end;flex-wrap:wrap}
+.pgn-info{font-size:11px;color:var(--text3);font-family:var(--mono);margin-right:6px}
+.pgn-btn{padding:3px 9px;border:1px solid var(--border2);border-radius:var(--r);background:var(--surface);cursor:pointer;font-size:11px;font-family:var(--mono)}
+.pgn-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pgn-btn:hover:not(.on){background:var(--surface2)}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:22px;right:22px;z-index:999;background:var(--text);color:#fff;padding:10px 16px;border-radius:var(--r);font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:270px}
+#toast.show{opacity:1}
+#toast.ok{background:var(--accent)}
+#toast.err{background:var(--danger)}
+
+/* ── Loading / empty ── */
+.loading{text-align:center;padding:36px;color:var(--text3);font-size:12px}
+.spin{width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-st{text-align:center;padding:36px;color:var(--text3);font-size:13px}
+
+/* ── Info strips ── */
+.istrip{border-radius:var(--r2);padding:12px 16px;margin-bottom:16px;font-size:13px;border:1px solid}
+.istrip.blue{background:var(--info-l);border-color:#a8c8e8}
+.istrip.green{background:var(--accent-l);border-color:#a0c8b0}
+.istrip.purple{background:var(--purple-l);border-color:#c0b0e0}
+
+/* ── Daily form header ── */
+.form-hdr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:14px}
+.fhg-item label{font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px}
+.fhg-item .fi{font-size:13px}
+
+/* ── Safety stock legend ── */
+.legend{display:flex;gap:14px;font-size:11px;color:var(--text2);margin-bottom:10px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══ Sidebar ══ -->
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="name">倉庫管理</div>
+    <div class="ver">Inventory System v1</div>
+  </div>
+  <div class="nav-sec">主要功能</div>
+  <div class="nav-item on" onclick="nav('inventory')" data-p="inventory"><span class="nav-icon">≡</span>庫存總覽</div>
+  <div class="nav-item"   onclick="nav('receive')"   data-p="receive">  <span class="nav-icon">↓</span>進貨 / 生產</div>
+  <div class="nav-item"   onclick="nav('transfer')"  data-p="transfer"> <span class="nav-icon">⇄</span>倉庫配送</div>
+  <div class="nav-item"   onclick="nav('usage')"     data-p="usage">    <span class="nav-icon">✎</span>每日食材使用</div>
+  <div class="nav-sec">紀錄查詢</div>
+  <div class="nav-item"   onclick="nav('purchase-log')" data-p="purchase-log"><span class="nav-icon">📋</span>進貨/生產紀錄</div>
+  <div class="nav-item"   onclick="nav('consumption')"  data-p="consumption"> <span class="nav-icon">↺</span>扣料明細</div>
+  <div class="nav-item"   onclick="nav('stock-update')" data-p="stock-update"><span class="nav-icon">🔍</span>物料更新紀錄</div>
+  <div class="sb-bottom">
+    <div class="sync-info" id="sync-info">尚未同步</div>
+    <button class="btn-resync" onclick="syncAll()">↻ 重新同步</button>
+  </div>
+</aside>
+
+<!-- ══ Main ══ -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="pg-title" id="pg-title">庫存總覽</div>
+      <div class="pg-meta"  id="pg-meta">所有倉庫庫存品項</div>
+    </div>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- Config banner -->
+    <div class="cfg-banner" id="cfg-banner">
+      <strong>⚙ 設定 Google Sheets API URL</strong>
+      <p style="font-size:12px;color:var(--text2);margin-top:3px">將 Apps Script 部署後的 Web App URL 貼入下方</p>
+      <div class="cfg-row">
+        <input type="text" id="api-input" placeholder="https://script.google.com/macros/s/xxxxxxxx/exec">
+        <button class="btn green" onclick="saveUrl()">儲存連線</button>
+        <button class="btn"       onclick="testConn()">測試</button>
+      </div>
+    </div>
+
+    <!-- ══════════════ 庫存總覽 ══════════════ -->
+    <div class="page on" id="page-inventory">
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--danger)"></span>低於安全庫存（紅底）</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--text3)"></span>零庫存</span>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="inv-q" placeholder="搜尋商品名稱、編號..." oninput="filterInv()">
+        <select id="inv-wh"   onchange="filterInv()"><option value="">全部倉庫</option></select>
+        <select id="inv-flag" onchange="filterInv()">
+          <option value="">全部狀態</option>
+          <option value="danger">低於安全庫存</option>
+          <option value="zero">零庫存</option>
+        </select>
+        <button class="btn sm" onclick="toggleInvSort()" id="inv-sort-btn">項次 ↑</button>
+      </div>
+      <div class="tw">
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>倉庫</th><th>商品名稱</th><th class="r">數量</th><th>單位</th>
+              <th class="r">項次</th><th>規格</th><th class="r">今日消耗</th>
+              <th class="r">安全庫存</th><th>狀態</th><th>庫存編號</th>
+            </tr>
+          </thead>
+          <tbody id="inv-body"><tr><td colspan="10" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pgn" id="inv-pgn"></div>
+    </div>
+
+    <!-- ══════════════ 進貨 / 生產（批次） ══════════════ -->
+    <div class="page" id="page-receive">
+      <div class="istrip blue">
+        <strong>批次進貨 / 生產</strong>　每列選「進貨」或「生產」，選生產時可在下方展開 BOM 用料單。確認後一次送出。
+      </div>
+      <div class="form-hdr-grid">
+        <div class="fhg-item"><label>日期</label><input class="fi" id="rc-date" type="date"></div>
+        <div class="fhg-item"><label>星期</label><input class="fi" id="rc-day" readonly placeholder="自動帶入"></div>
+        <div class="fhg-item"><label>建檔人員</label>
+          <select class="fi" id="rc-user"><option value="">— 選擇 —</option></select>
+        </div>
+      </div>
+      <div class="tw" style="overflow:visible">
+        <div style="display:flex;gap:8px;padding:10px 12px;background:var(--surface2);border-bottom:1px solid var(--border);align-items:center">
+          <label style="font-size:11px;font-weight:600;color:var(--text2)">篩選倉庫（帶入食材）</label>
+          <select id="rc-filter-wh" class="fi" style="width:160px;font-size:12px;padding:4px 8px" onchange="updateRcWhFilter()">
+            <option value="">— 選擇倉庫 —</option>
+          </select>
+        </div>
+        <table class="batch-table" id="rc-table">
+          <thead>
+            <tr>
+              <th class="idx">#</th>
+              <th style="min-width:50px">類型</th>
+              <th style="min-width:180px">食材名稱 *</th>
+              <th style="min-width:85px">商品編號</th>
+              <th style="min-width:70px">倉庫代碼</th>
+              <th style="min-width:75px;text-align:right">數量 *</th>
+              <th style="min-width:65px">單位</th>
+              <th style="min-width:85px">規格</th>
+              <th style="min-width:100px">BOM編號</th>
+              <th style="width:36px"></th>
+            </tr>
+          </thead>
+          <tbody id="rc-body"></tbody>
+        </table>
+      </div>
+      <!-- BOM 展開區（點擊生產列的 BOM 按鈕後出現） -->
+      <div id="bom-expand-area" style="display:none;margin-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:700;color:var(--purple)">BOM 用料單 — <span id="bom-expand-title"></span></span>
+          <button class="btn sm" onclick="closeBomExpand()">收起</button>
+        </div>
+        <div class="bom-panel">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px">計算用量可手動調整，作為實際消耗量記錄：</div>
+          <table class="bom-rt">
+            <thead><tr><th>#</th><th>物料編號</th><th>物料名稱</th><th>規格</th><th>單位</th><th class="r">計算用量</th><th class="r">實際消耗量</th></tr></thead>
+            <tbody id="bom-expand-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <button class="add-row-btn" onclick="addRcRow()">＋ 新增一行</button>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button class="btn" onclick="clearRcRows()">清空</button>
+        <button class="btn green" onclick="submitReceive()">✓ 確認送出</button>
+      </div>
+      <div class="ferr" id="rc-err"></div>
+    </div>
+
+    <!-- produce page removed - merged into receive -->
+
+    <!-- ══════════════ 倉庫配送（批次填寫固定清單） ══════════════ -->
+    <div class="page" id="page-transfer">
+      <div class="istrip blue"><strong>倉庫配送</strong>　固定清單預填，只需填寫「配送數量」，數量為 0 的不送出。特殊品項可在下方調整倉庫。</div>
+      <div class="form-hdr-grid">
+        <div class="fhg-item"><label>時間</label>
+          <select class="fi" id="tr-time"><option>上午</option><option selected>下午</option></select>
+        </div>
+        <div class="fhg-item"><label>日期</label><input class="fi" id="tr-date" type="date"></div>
+        <div class="fhg-item"><label>星期</label><input class="fi" id="tr-day" readonly></div>
+        <div class="fhg-item"><label>製單人員</label>
+          <select class="fi" id="tr-user"><option value="">— 選擇 —</option></select>
+        </div>
+        <div class="fhg-item"><label>配送人員</label>
+          <select class="fi" id="tr-driver"><option value="">— 選擇 —</option></select>
+        </div>
+        <div class="fhg-item">
+          <label>預設出庫倉庫</label>
+          <select class="fi" id="tr-default-from" onchange="rebuildTransferList()"><option value="">— 選擇 —</option></select>
+        </div>
+        <div class="fhg-item">
+          <label>預設入庫倉庫</label>
+          <select class="fi" id="tr-default-to" onchange="rebuildTransferList()"><option value="">— 選擇 —</option></select>
+        </div>
+      </div>
+      <div class="tw">
+        <table class="dt" id="tr-table">
+          <thead>
+            <tr>
+              <th>商品名稱</th><th class="r">配送數量</th><th>單位</th>
+              <th class="r">現有庫存</th><th>規格</th><th>庫存編號</th>
+              <th class="r">項次</th><th>出庫倉庫</th><th>入庫倉庫</th>
+            </tr>
+          </thead>
+          <tbody id="tr-body"><tr><td colspan="9" class="empty-st">請先選擇出庫倉庫以載入清單</td></tr></tbody>
+        </table>
+      </div>
+      <div style="margin-top:18px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:700;color:var(--text2)">臨時新增品項</span>
+        <span style="font-size:11px;color:var(--text3)">固定清單以外的臨時配送品項</span>
+      </div>
+      <div class="tw" style="overflow:visible;margin-bottom:6px">
+        <table class="batch-table" id="tr-extra-table">
+          <thead>
+            <tr>
+              <th class="idx">#</th>
+              <th style="min-width:120px">商品名稱 *</th>
+              <th style="min-width:80px">庫存編號</th>
+              <th style="min-width:75px;text-align:right">配送數量 *</th>
+              <th style="min-width:65px">單位</th>
+              <th style="min-width:70px">出庫倉庫</th>
+              <th style="min-width:70px">入庫倉庫</th>
+              <th style="width:36px"></th>
+            </tr>
+          </thead>
+          <tbody id="tr-extra-body"></tbody>
+        </table>
+      </div>
+      <button class="add-row-btn" onclick="addTrExtra()">＋ 新增臨時配送品項</button>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+        <span style="font-size:12px;color:var(--text3)">＊ 數量填 0 或空白的品項不送出</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="clearTransferQty()">清空數量</button>
+          <button class="btn green" onclick="submitTransfer()">✓ 確認送出配送單</button>
+        </div>
+      </div>
+      <div class="ferr" id="tr-err"></div>
+    </div>
+
+    <!-- ══════════════ 每日食材使用（批次固定清單） ══════════════ -->
+    <div class="page" id="page-usage">
+      <div class="istrip green"><strong>每日食材使用</strong>　填入「今日庫存」數量，消耗量會自動計算（昨日庫存 − 今日庫存）。</div>
+      <div class="form-hdr-grid">
+        <div class="fhg-item"><label>標題（Day編號）</label><input class="fi" id="us-title" placeholder="例：day41"></div>
+        <div class="fhg-item"><label>日期</label><input class="fi" id="us-date" type="date"></div>
+        <div class="fhg-item"><label>星期</label><input class="fi" id="us-day" readonly></div>
+        <div class="fhg-item"><label>建檔人員</label>
+          <select class="fi" id="us-user"><option value="">— 選擇 —</option></select>
+        </div>
+        <div class="fhg-item"><label>特別備註</label><input class="fi" id="us-note" placeholder="選填"></div>
+        <div class="fhg-item">
+          <label>倉庫（篩選清單）</label>
+          <select class="fi" id="us-wh" onchange="rebuildUsageList()"><option value="">— 選擇倉庫 —</option></select>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--danger)"></span>低於安全庫存</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>接近安全庫存</span>
+      </div>
+      <div class="tw">
+        <table class="dt" id="us-table">
+          <thead>
+            <tr>
+              <th>商品名稱</th>
+              <th class="r" style="min-width:110px">今日庫存（輸入）</th>
+              <th class="r">消耗量（自動）</th><th>單位</th>
+              <th class="r">昨日庫存</th><th>規格</th><th>商品編號</th><th class="r">項次</th>
+            </tr>
+          </thead>
+          <tbody id="us-body"><tr><td colspan="8" class="empty-st">請先選擇倉庫以載入清單</td></tr></tbody>
+        </table>
+      </div>
+      <div style="margin-top:18px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:700;color:var(--text2)">臨時新增品項</span>
+        <span style="font-size:11px;color:var(--text3)">固定清單以外的品項，偶爾填寫</span>
+      </div>
+      <div class="tw" style="margin-bottom:6px">
+        <table class="batch-table" id="us-extra-table">
+          <thead>
+            <tr>
+              <th class="idx">#</th>
+              <th style="min-width:120px">商品名稱 *</th>
+              <th style="min-width:80px">商品編號</th>
+              <th style="min-width:90px">規格</th>
+              <th style="min-width:70px">單位</th>
+              <th style="min-width:90px;text-align:right">使用數量 *</th>
+              <th style="width:36px"></th>
+            </tr>
+          </thead>
+          <tbody id="us-extra-body"></tbody>
+        </table>
+      </div>
+      <button class="add-row-btn" onclick="addUsExtra()">＋ 新增臨時品項</button>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+        <span style="font-size:12px;color:var(--text3)">＊ 使用數量為 0 或空白的品項不送出</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="clearUsageQty()">清空數量</button>
+          <button class="btn green" onclick="submitUsage()">✓ 確認送出使用記錄</button>
+        </div>
+      </div>
+      <div class="ferr" id="us-err"></div>
+    </div>
+
+    <!-- ══════════════ 進貨紀錄 ══════════════ -->
+    <div class="page" id="page-purchase-log">
+      <div class="filter-bar">
+        <input type="text" id="pl-q" placeholder="搜尋食材名稱..." oninput="filterPL()">
+        <select id="pl-type" onchange="filterPL()">
+          <option value="">進貨 &amp; 生產</option>
+          <option value="進貨">進貨</option>
+          <option value="生產">生產</option>
+        </select>
+        <input type="date" id="pl-df" onchange="filterPL()">
+        <input type="date" id="pl-dt" onchange="filterPL()">
+      </div>
+      <div class="tw">
+        <table class="dt">
+          <thead>
+            <tr><th>食材名稱</th><th>生產&amp;進貨</th><th>星期</th><th>日期</th><th>時間</th><th>建檔人員</th></tr>
+          </thead>
+          <tbody id="pl-body"><tr><td colspan="6" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pgn" id="pl-pgn"></div>
+    </div>
+
+    <!-- ══════════════ 消耗紀錄 ══════════════ -->
+    <div class="page" id="page-consumption">
+      <div class="filter-bar">
+        <input type="text" id="co-q" placeholder="搜尋商品名稱..." oninput="filterCo()">
+        <input type="date" id="co-df" onchange="filterCo()">
+        <input type="date" id="co-dt" onchange="filterCo()">
+      </div>
+      <div class="tw">
+        <table class="dt">
+          <thead>
+            <tr><th>日期</th><th>星期</th><th>庫存編號</th><th>商品名稱</th>
+            <th class="r">消耗數量</th><th>單位</th><th>規格</th></tr>
+          </thead>
+          <tbody id="co-body"><tr><td colspan="7" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pgn" id="co-pgn"></div>
+    </div>
+
+    <!-- ══════════════ 物料更新紀錄 ══════════════ -->
+    <div class="page" id="page-stock-update">
+      <div class="filter-bar">
+        <input type="text" id="su-q" placeholder="搜尋商品名稱、倉庫編號..." oninput="filterSU()">
+        <input type="date" id="su-df" onchange="filterSU()">
+        <input type="date" id="su-dt" onchange="filterSU()">
+      </div>
+      <div class="tw">
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>日期時間</th><th class="r">更新筆數</th><th>倉庫編號</th>
+              <th>商品名稱</th><th class="r">舊的數量</th><th class="r">新的數量</th>
+            </tr>
+          </thead>
+          <tbody id="su-body"><tr><td colspan="6" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pgn" id="su-pgn"></div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let API = localStorage.getItem('inv_api') || '';
+const PS = 100;
+const DAYS = ['日','一','二','三','四','五','六'];
+
+let D = {
+  inventory:[], purchase:[], delivery:[], usageLog:[], bom:[], consumption:[], stockUpdate:[]
+};
+let F = { inventory:[], purchase:[], consumption:[], stockUpdate:[] };
+let PG = { inventory:1, purchase:1, consumption:1, stockUpdate:1 };
+
+const PAGE_META = {
+  inventory:    ['庫存總覽',        '所有倉庫庫存品項，含安全庫存預警'],
+  receive:      ['進貨 / 生產',     '批次填寫進貨或生產，生產可展開 BOM 用料單'],
+  transfer:     ['倉庫配送',        '固定清單批次填寫配送數量'],
+  usage:        ['每日食材使用',    '固定清單批次填寫每日消耗量'],
+  'purchase-log':['進貨/生產紀錄', '歷史進貨與生產記錄'],
+  consumption:  ['扣料明細',        '歷史消耗扣料記錄'],
+  'stock-update':['物料更新紀錄',  '庫存數量異動追蹤，供異常查詢用'],
+};
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+window.addEventListener('load', () => {
+  // 台灣時間今日日期
+  const twNow  = new Date(new Date().toLocaleString('en-US', {timeZone:'Asia/Taipei'}));
+  const today  = twNow.toISOString().slice(0,10);
+  ['rc-date','tr-date','us-date'].forEach(id => { const el=g(id); if(el) el.value=today; });
+  ['rc-date','tr-date','us-date'].forEach(id => {
+    const el=g(id);
+    if(el){ el.addEventListener('change', e=>syncDay(e.target)); syncDay(el); }
+  });
+  if (API) {
+    g('api-input').value = API;
+    g('cfg-banner').style.display = 'none';
+    syncAll();
+  }
+  initBatchRows();
+  renderTrExtra();
+  renderUsExtra();
+  initPeopleDropdowns();
+});
+
+function syncDay(dateEl) {
+  const map = {'rc-date':'rc-day','tr-date':'tr-day','us-date':'us-day'};
+  const target = map[dateEl.id]; if(!target) return;
+  const d = new Date(dateEl.value+'T00:00:00');
+  g(target).value = isNaN(d) ? '' : DAYS[d.getDay()];
+}
+
+// ═══════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════
+function nav(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('on'));
+  g('page-' + name).classList.add('on');
+  document.querySelector(`[data-p="${name}"]`).classList.add('on');
+  const [t, m] = PAGE_META[name] || [name,''];
+  g('pg-title').textContent = t;
+  g('pg-meta').textContent  = m;
+  g('topbar-actions').innerHTML = '';
+}
+
+// ═══════════════════════════════════════
+// API
+// ═══════════════════════════════════════
+async function fetchTab(tab) {
+  const r = await fetch(`${API}?tab=${tab}`);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d.rows || [];
+}
+async function post(payload) {
+  const r = await fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+// ═══════════════════════════════════════
+// SYNC
+// ═══════════════════════════════════════
+async function syncAll() {
+  if (!API) return;
+  try {
+    const [inv, pur, del, use, bom, con, su] = await Promise.all([
+      fetchTab('inventory').catch(()=>[]),
+      fetchTab('purchase').catch(()=>[]),
+      fetchTab('delivery').catch(()=>[]),
+      fetchTab('usage').catch(()=>[]),
+      fetchTab('bom').catch(()=>[]),
+      fetchTab('consumption').catch(()=>[]),
+      fetchTab('stockUpdate').catch(()=>[]),
+    ]);
+    D.inventory = inv; D.purchase = pur; D.delivery = del;
+    D.usageLog = use; D.bom = bom; D.consumption = con; D.stockUpdate = su;
+    g('sync-info').textContent = '同步 ' + new Date().toLocaleTimeString('zh-TW');
+    buildDropdowns();
+    F = { inventory:[...inv], purchase:[...pur], consumption:[...con], stockUpdate:[...su] };
+    renderAll();
+    toast('同步完成','ok');
+  } catch(e) { toast('同步失敗：' + e.message,'err'); }
+}
+
+function renderAll() {
+  renderInv(); renderPL(); renderCo(); renderSU();
+}
+
+// ═══════════════════════════════════════
+// DROPDOWNS
+// ═══════════════════════════════════════
+function buildDropdowns() {
+  const whs  = [...new Set(D.inventory.map(r => (r['倉庫名稱']||'').trim()).filter(Boolean))];
+  const wh2  = [...new Set(D.inventory.map(r => (r['倉庫代碼']||r['倉庫名稱']||'').trim()).filter(Boolean))];
+  const codes= [...new Set([...whs,...wh2])];
+
+  setOpts('inv-wh',  whs.map(w=>[w,w]), '全部倉庫');
+  setOpts('tr-default-from', codes.map(w=>[w,w]),'— 選擇出庫倉庫 —');
+  setOpts('tr-default-to',   codes.map(w=>[w,w]),'— 選擇入庫倉庫 —');
+  setOpts('us-wh',   whs.map(w=>[w,w]), '— 選擇倉庫 —');
+  setOpts('pr-wh',   whs.map(w=>[w,w]), '— 選擇倉庫 —');
+  setOpts('rc-filter-wh', whs.map(w=>[w,w]), '— 選擇倉庫 —');
+
+  const bomProds = [...new Map(D.bom.map(r=>[r['BOM編號'],r])).values()];
+  setOpts('pr-bom', bomProds.map(r=>[r['BOM編號'], `${r['BOM編號']} ${r['物料名稱']||''}`]),'— 選擇 BOM —');
+
+  // 人員下拉（所有頁面共用）
+  initPeopleDropdowns();
+
+  // 每日食材使用預設倉庫 195（只在第一次未選時自動選）
+  const usWh = g('us-wh');
+  if(usWh && !usWh.value) {
+    const opt195 = [...usWh.options].find(o => o.value === '195' || o.text.includes('195'));
+    if(opt195) { usWh.value = opt195.value; rebuildUsageList(); }
+  } else if(usWh && usWh.value) {
+    rebuildUsageList();
+  }
+}
+
+function setOpts(id, pairs, placeholder) {
+  const el = g(id); if(!el) return;
+  const cur = el.value;
+  el.innerHTML = `<option value="">${placeholder}</option>` + pairs.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  if(cur) el.value = cur;
+}
+
+// ═══════════════════════════════════════
+// INVENTORY
+// ═══════════════════════════════════════
+let invSortAsc = true;
+function toggleInvSort() {
+  invSortAsc = !invSortAsc;
+  g('inv-sort-btn').textContent = invSortAsc ? '項次 ↑' : '項次 ↓';
+  renderInv();
+}
+
+// 安全庫存查詢表（以庫存編號為 key，從庫存資料讀取）
+function getSafeStock(row) {
+  const inv = D.inventory.find(r => r['庫存編號'] === row['庫存編號']);
+  return parseFloat((inv || row)['安全庫存']) || 0;
+}
+
+function stockStatus(row) {
+  const qty  = parseFloat(row['數量']) || 0;
+  const safe = getSafeStock(row);
+  if (qty === 0) return 'zero';
+  if (safe > 0 && qty < safe) return 'danger';
+  return 'ok';
+}
+
+function filterInv() {
+  const q  = gv('inv-q').toLowerCase();
+  const wh = gv('inv-wh');
+  const fl = gv('inv-flag');
+  F.inventory = D.inventory.filter(r => {
+    if (q && !(`${r['商品名稱']||''} ${r['庫存編號']||''} ${r['商品編號']||''}`).toLowerCase().includes(q)) return false;
+    if (wh  && (r['倉庫名稱']||'').trim() !== wh)  return false;
+    const st = stockStatus(r);
+    if (fl === 'danger' && st !== 'danger') return false;
+    if (fl === 'zero'   && st !== 'zero')   return false;
+    return true;
+  });
+  PG.inventory = 1; renderInv();
+}
+
+function renderInv() {
+  let rows = [...F.inventory].sort((a,b)=>{
+    const ai = parseInt(a['項次'])||9999, bi = parseInt(b['項次'])||9999;
+    return invSortAsc ? ai-bi : bi-ai;
+  });
+  const slice= rows.slice((PG.inventory-1)*PS, PG.inventory*PS);
+  g('inv-body').innerHTML = slice.length ? slice.map((r,i) => {
+    const st  = stockStatus(r);
+    const qty = parseFloat(r['數量']) ?? 0;
+    const safe= getSafeStock(r);
+    const con = parseFloat(r['今日消耗']) || 0;
+    const rowCls = st==='danger' ? 'danger-row' : '';
+    const qtyCls = st==='danger' ? 'qty-danger' : 'qty-cell';
+    const stBadge= st==='danger' ? '<span class="badge danger">低庫存</span>' : st==='zero' ? '<span class="badge gray">零庫存</span>' : '';
+    return `<tr class="${rowCls}">
+      <td>${r['倉庫名稱']||'—'}</td>
+      <td><strong>${r['商品名稱']||'—'}</strong></td>
+      <td class="r ${qtyCls}">${qty}</td>
+      <td class="dim">${r['單位']||'—'}</td>
+      <td class="r mono dim">${r['項次']||i+1}</td>
+      <td class="dim mono">${r['規格']||'—'}</td>
+      <td class="r dim">${con||'—'}</td>
+      <td class="r dim">${safe||'—'}</td>
+      <td>${stBadge}</td>
+      <td class="mono dim">${r['庫存編號']||'—'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="10" class="empty-st">無符合條件的資料</td></tr>`;
+  mkPgn('inv-pgn', rows.length, PG.inventory, n=>{PG.inventory=n;renderInv();});
+}
+
+// ═══════════════════════════════════════
+// RECEIVE + PRODUCE (merged batch)
+// ═══════════════════════════════════════
+let rcRows = [];
+let activeBomRowId = null; // which row's BOM is currently expanded
+
+function initBatchRows() {
+  rcRows = [];
+  for(let i=0;i<3;i++) addRcRow();
+}
+
+function addRcRow() {
+  const id = Date.now() + rcRows.length + Math.random();
+  rcRows.push({ id, type:'進貨', invId:'', name:'', code:'', wh:'', qty:'', unit:'', spec:'', bom:'' });
+  renderRcRows();
+}
+
+// rc-filter-wh change handler
+function updateRcWhFilter() {
+  renderRcRows();
+}
+
+function getRcFilteredItems() {
+  const wh = gv('rc-filter-wh');
+  if (!wh) return D.inventory;
+  return D.inventory.filter(r => (r['倉庫名稱']||'').trim() === wh.trim() || (r['倉庫代碼']||'').trim() === wh.trim());
+}
+
+function renderRcRows() {
+  const items  = getRcFilteredItems().sort((a,b)=>(parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
+  const nameOpts = items.map(r=>`<option value="${r['庫存編號']}">${r['商品名稱']||''} (${r['庫存編號']||''})</option>`).join('');
+  const bomIds = [...new Map(D.bom.map(r=>[r['BOM編號'],r])).values()];
+  const bOpts  = bomIds.map(r=>`<option value="${r['BOM編號']}">${r['BOM編號']} ${r['物料名稱']||''}</option>`).join('');
+
+  g('rc-body').innerHTML = rcRows.map((r,i) => {
+    const isProd = r.type === '生產';
+    return `<tr id="rcr-${r.id}" style="${isProd?'background:var(--purple-l)':''}">
+      <td class="idx">${i+1}</td>
+      <td>
+        <select style="font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;background:${isProd?'var(--purple-l)':'var(--surface)'}"
+          onchange="updateRcRow(${r.id},'type',this.value);renderRcRows()">
+          <option value="進貨" ${r.type==='進貨'?'selected':''}>進貨</option>
+          <option value="生產" ${r.type==='生產'?'selected':''}>生產</option>
+        </select>
+      </td>
+      <td>
+        <select style="font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;width:100%;max-width:200px"
+          onchange="onRcNameSelect(${r.id},this.value)">
+          <option value="">— 選擇食材 —</option>${nameOpts}
+        </select>
+      </td>
+      <td><input value="${r.code}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td><input value="${r.wh}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td><input type="number" value="${r.qty}" min="0" step="0.01" style="text-align:right;font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%" oninput="updateRcRow(${r.id},'qty',this.value)" placeholder="0"></td>
+      <td><input value="${r.unit}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td><input value="${r.spec}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td>${isProd
+        ? `<select style="font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;max-width:130px"
+            onchange="updateRcRow(${r.id},'bom',this.value);expandBom(${r.id})">
+            <option value="">— BOM —</option>${bOpts}
+           </select>`
+        : `<span style="font-size:11px;color:var(--text3)">—</span>`
+      }</td>
+      <td><button class="del-btn" onclick="delRcRow(${r.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  // restore select values for BOM
+  rcRows.forEach(r => {
+    const row = document.getElementById('rcr-'+r.id);
+    if(!row) return;
+    // Set name select
+    const nameSel = row.querySelectorAll('select')[1];
+    if(nameSel && r.invId) nameSel.value = r.invId;
+    if(r.type==='生產') {
+      const bomSel = row.querySelectorAll('select')[2];
+      if(bomSel && r.bom) bomSel.value = r.bom;
+    }
+  });
+}
+
+function onRcNameSelect(id, invId) {
+  const r = rcRows.find(x=>x.id===id);
+  if(!r) return;
+  r.invId = invId;
+  const item = D.inventory.find(x=>x['庫存編號']===invId);
+  if(item) {
+    r.name = item['商品名稱']||'';
+    r.code = item['商品編號']||'';
+    r.wh   = item['倉庫代碼']||item['倉庫名稱']||'';
+    r.unit = item['單位']||'';
+    r.spec = item['規格']||'';
+  }
+  renderRcRows();
+}
+
+function updateRcRow(id, key, val) {
+  const r = rcRows.find(x=>x.id===id);
+  if(r) r[key] = val;
+}
+function delRcRow(id) {
+  rcRows = rcRows.filter(x=>x.id!==id);
+  if(activeBomRowId===id) closeBomExpand();
+  renderRcRows();
+}
+function clearRcRows() { rcRows=[]; activeBomRowId=null; closeBomExpand(); initBatchRows(); }
+
+// BOM expand panel
+function expandBom(rowId) {
+  const r = rcRows.find(x=>x.id===rowId);
+  if(!r || !r.bom) { closeBomExpand(); return; }
+  activeBomRowId = rowId;
+  const lines = D.bom.filter(x=>x['BOM編號']===r.bom);
+  if(!lines.length) { closeBomExpand(); return; }
+  const base  = parseFloat(lines[0]['生產數量'])||1;
+  const qty   = parseFloat(r.qty)||1;
+  const ratio = qty/base;
+  g('bom-expand-title').textContent = `${r.bom} ${lines[0]['物料名稱']||''} × ${qty} ${lines[0]['單位']||''}`;
+  g('bom-expand-body').innerHTML = lines.map((l,i)=>{
+    const calc = ((parseFloat(l['用量'])||0)*ratio).toFixed(4);
+    return `<tr>
+      <td class="idx">${i+1}</td>
+      <td class="mono">${l['子物料編號']||'—'}</td>
+      <td>${l['子物料名稱']||'—'}</td>
+      <td class="dim">${l['子規格']||'—'}</td>
+      <td>${l['子單位']||'—'}</td>
+      <td class="r mono">${calc}</td>
+      <td><input type="number" style="width:90px;text-align:right;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;font-size:12px"
+        value="${calc}" step="0.0001" data-mat="${l['子物料編號']}" data-name="${l['子物料名稱']||''}"></td>
+    </tr>`;
+  }).join('');
+  g('bom-expand-area').style.display='block';
+  g('bom-expand-area').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function closeBomExpand() {
+  activeBomRowId = null;
+  g('bom-expand-area').style.display='none';
+  g('bom-expand-body').innerHTML='';
+}
+
+// recalc BOM when qty changes (called via oninput on qty field)
+function updateRcRowAndRecalc(id, key, val) {
+  updateRcRow(id, key, val);
+  if(activeBomRowId===id) expandBom(id);
+}
+
+async function submitReceive() {
+  const err  = g('rc-err');
+  const date = gv('rc-date');
+  const user = gv('rc-user');
+  const day  = gv('rc-day');
+  const valid= rcRows.filter(r=>r.name.trim()&&parseFloat(r.qty)>0);
+  if(!date)         return showErr(err,'請填寫日期');
+  if(!valid.length) return showErr(err,'請至少填寫一筆有食材名稱和數量的記錄');
+  err.style.display='none';
+  try {
+    for(const r of valid) {
+      await post({ action:'append', tab:'purchase', data:{
+        '食材名稱':       r.name.trim(),
+        '進貨&生產':      r.type,
+        '日期':           date,
+        '星期':           day,
+        '進貨/生產數量':  parseFloat(r.qty)||0,
+        '入庫商品編號':   r.code,
+        '入庫倉庫':       r.wh,
+        '入庫單位':       r.unit,
+        '入庫規格':       r.spec,
+        'BOM編號':        r.bom,
+        '建檔人員':       user,
+        '簽核':           'N',
+      }});
+    }
+    toast(`送出成功（${valid.length} 筆）`,'ok');
+    clearRcRows();
+    closeBomExpand();
+    syncAll();
+  } catch(e) { showErr(err, e.message); }
+}
+
+// ═══════════════════════════════════════
+// TRANSFER (batch fixed list + extras)
+// ═══════════════════════════════════════
+let trExtraRows = [];
+
+function rebuildTransferList() {
+  const from = gv('tr-default-from');
+  const to   = gv('tr-default-to');
+  if(!from){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">請先選擇出庫倉庫</td></tr>`; return; }
+
+  const items = D.inventory
+    .filter(r => (r['倉庫代碼']||r['倉庫名稱']||'').trim() == from.trim() || (r['倉庫名稱']||'').trim() == from.trim())
+    .sort((a,b)=> (parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
+
+  if(!items.length){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }
+
+  const whs    = [...new Set(D.inventory.map(r=>r['倉庫名稱']||r['倉庫代碼']).filter(Boolean))];
+  const whOpts = whs.map(w=>`<option value="${w}" ${w==to?'selected':''}>${w}</option>`).join('');
+
+  g('tr-body').innerHTML = items.map((r,i)=>{
+    const qty = parseFloat(r['數量'])||0;
+    const st  = stockStatus(r);
+    const qc  = st==='danger'?'qty-danger':'qty-cell';
+    return `<tr id="trr-${r['庫存編號']}">
+      <td><strong>${r['商品名稱']||'—'}</strong></td>
+      <td class="editable">
+        <input type="number" min="0" step="0.01" placeholder="0"
+          style="width:90px;text-align:right;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;font-size:13px"
+          data-id="${r['庫存編號']}" data-name="${r['商品名稱']}" data-unit="${r['單位']||''}"
+          oninput="this.closest('tr').classList.toggle('changed',this.value>0)">
+      </td>
+      <td class="dim">${r['單位']||'—'}</td>
+      <td class="r ${qc}">${qty}</td>
+      <td class="dim mono">${r['規格']||'—'}</td>
+      <td class="mono">${r['庫存編號']||'—'}</td>
+      <td class="r mono dim">${r['項次']||i+1}</td>
+      <td>
+        <select style="font-size:12px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px" data-role="from">
+          <option value="${from}">${from}</option>
+        </select>
+      </td>
+      <td>
+        <select style="font-size:12px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px" data-role="to">
+          <option value="">${to?'':' — '}</option>${whOpts}
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// Transfer extra rows
+function addTrExtra() {
+  const id = Date.now() + trExtraRows.length + Math.random();
+  const from = gv('tr-default-from');
+  const to   = gv('tr-default-to');
+  trExtraRows.push({ id, name:'', invId:'', qty:'', unit:'', from, to });
+  renderTrExtra();
+}
+
+function renderTrExtra() {
+  const units = [...new Set(D.inventory.map(r=>r['單位']).filter(Boolean))];
+  const whs   = [...new Set(D.inventory.map(r=>r['倉庫名稱']||r['倉庫代碼']).filter(Boolean))];
+  const uOpts = units.map(u=>`<option value="${u}">${u}</option>`).join('');
+  const wOpts = whs.map(w=>`<option value="${w}">${w}</option>`).join('');
+  g('tr-extra-body').innerHTML = trExtraRows.map((r,i)=>`
+    <tr id="tex-${r.id}">
+      <td class="idx">${i+1}</td>
+      <td><input value="${r.name}" oninput="updTrExtra(${r.id},'name',this.value)" placeholder="商品名稱"></td>
+      <td><input value="${r.invId}" oninput="updTrExtra(${r.id},'invId',this.value)" placeholder="庫存編號"></td>
+      <td><input type="number" value="${r.qty}" min="0" step="0.01" style="text-align:right" oninput="updTrExtra(${r.id},'qty',this.value)" placeholder="0"></td>
+      <td><select onchange="updTrExtra(${r.id},'unit',this.value)"><option value="">—</option>${uOpts}</select></td>
+      <td><select onchange="updTrExtra(${r.id},'from',this.value)"><option value="">—</option>${wOpts}</select></td>
+      <td><select onchange="updTrExtra(${r.id},'to',this.value)"><option value="">—</option>${wOpts}</select></td>
+      <td><button class="del-btn" onclick="delTrExtra(${r.id})">✕</button></td>
+    </tr>`).join('');
+  trExtraRows.forEach(r => {
+    const row = document.getElementById('tex-'+r.id);
+    if(!row) return;
+    const sels = row.querySelectorAll('select');
+    sels[0].value = r.unit;
+    sels[1].value = r.from;
+    sels[2].value = r.to;
+  });
+}
+
+function updTrExtra(id,key,val){ const r=trExtraRows.find(x=>x.id===id); if(r) r[key]=val; }
+function delTrExtra(id){ trExtraRows=trExtraRows.filter(x=>x.id!==id); renderTrExtra(); }
+
+function clearTransferQty() {
+  document.querySelectorAll('#tr-body input[type=number]').forEach(i=>{ i.value=''; i.closest('tr').classList.remove('changed'); });
+  trExtraRows=[]; renderTrExtra();
+}
+
+async function submitTransfer() {
+  const err    = g('tr-err');
+  const date   = gv('tr-date');
+  const user   = gv('tr-user');
+  const driver = gv('tr-driver');
+  const time   = gv('tr-time');
+  if(!date) return showErr(err,'請填寫日期');
+
+  const fixedRows  = [...document.querySelectorAll('#tr-body input[type=number]')].filter(i=>parseFloat(i.value)>0);
+  const extraValid = trExtraRows.filter(r=>r.name.trim()&&parseFloat(r.qty)>0);
+  if(!fixedRows.length && !extraValid.length) return showErr(err,'請至少填寫一筆配送數量');
+  err.style.display='none';
+
+  const base = { '時間':time, '日期':date, '星期':gv('tr-day'), '製單人員':user, '配送人員':driver };
+  let count=0;
+  try {
+    for(const input of fixedRows){
+      const tr   = input.closest('tr');
+      const from = tr.querySelector('[data-role=from]').value;
+      const to   = tr.querySelector('[data-role=to]').value;
+      await post({ action:'append', tab:'delivery', data:{
+        ...base,
+        '商品名稱': input.dataset.name,
+        '庫存編號': input.dataset.id,
+        '轉出倉庫代號': from,
+        '轉入倉庫代號': to,
+        '數量': parseFloat(input.value),
+        '單位': input.dataset.unit,
+      }});
+      count++;
+    }
+    for(const r of extraValid){
+      await post({ action:'append', tab:'delivery', data:{
+        ...base,
+        '商品名稱': r.name.trim(),
+        '庫存編號': r.invId,
+        '轉出倉庫代號': r.from,
+        '轉入倉庫代號': r.to,
+        '數量': parseFloat(r.qty),
+        '單位': r.unit,
+      }});
+      count++;
+    }
+    toast(`配送單送出成功（${count} 筆）`,'ok');
+    clearTransferQty();
+    syncAll();
+  } catch(e) { showErr(err, e.message); }
+}
+
+// ═══════════════════════════════════════
+// USAGE (batch fixed list)
+// ═══════════════════════════════════════
+function rebuildUsageList() {
+  const wh = gv('us-wh');
+  if(!wh){ g('us-body').innerHTML=`<tr><td colspan="8" class="empty-st">請先選擇倉庫</td></tr>`; return; }
+
+  const items = D.inventory
+    .filter(r => (r['倉庫名稱']||'').trim()==wh.trim())
+    .sort((a,b)=> (parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
+
+  if(!items.length){ g('us-body').innerHTML=`<tr><td colspan="8" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }
+
+  g('us-body').innerHTML = items.map((r,i)=>{
+    const yest = parseFloat(r['數量'])||0;   // 昨日庫存 = 目前 Sheets 上的數量
+    const st   = stockStatus(r);
+    const qc   = st==='danger'?'qty-danger':st==='warn'?'qty-low':'qty-cell';
+    const rowCls = st==='danger'?'danger-row':st==='warn'?'warn-row':'';
+    return `<tr class="${rowCls}" id="usr-${r['庫存編號']}">
+      <td><strong>${r['商品名稱']||'—'}</strong></td>
+      <td class="editable">
+        <input type="number" min="0" step="0.01" placeholder="輸入今日庫存"
+          style="width:110px;text-align:right;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;font-size:13px"
+          data-id="${r['庫存編號']}" data-name="${r['商品名稱']}"
+          data-unit="${r['單位']||''}" data-spec="${r['規格']||''}" data-code="${r['商品編號']||''}"
+          data-yest="${yest}"
+          oninput="onUsageTodayInput(this)">
+      </td>
+      <td class="r mono" id="cons-${r['庫存編號']}" style="font-weight:600;color:var(--text2)">—</td>
+      <td class="dim">${r['單位']||'—'}</td>
+      <td class="r ${qc}">${yest}</td>
+      <td class="dim mono">${r['規格']||'—'}</td>
+      <td class="mono dim">${r['商品編號']||'—'}</td>
+      <td class="r mono dim">${r['項次']||i+1}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 臨時品項 (extra rows) ──
+let usExtraRows = [];
+
+function addUsExtra() {
+  const id = Date.now() + usExtraRows.length;
+  usExtraRows.push({ id, name:'', code:'', spec:'', unit:'', qty:'' });
+  renderUsExtra();
+}
+
+function renderUsExtra() {
+  const units = [...new Set(D.inventory.map(r=>r['單位']).filter(Boolean))];
+  const uOpts = units.map(u=>`<option value="${u}">${u}</option>`).join('');
+  g('us-extra-body').innerHTML = usExtraRows.map((r,i)=>`
+    <tr id="uxr-${r.id}">
+      <td class="idx">${i+1}</td>
+      <td><input value="${r.name}" oninput="updUsExtra(${r.id},'name',this.value)" placeholder="食材名稱"></td>
+      <td><input value="${r.code}" oninput="updUsExtra(${r.id},'code',this.value)" placeholder="商品編號"></td>
+      <td><input value="${r.spec}" oninput="updUsExtra(${r.id},'spec',this.value)" placeholder="規格"></td>
+      <td><select onchange="updUsExtra(${r.id},'unit',this.value)">
+        <option value="">—</option>${uOpts}
+      </select></td>
+      <td><input type="number" value="${r.qty}" min="0" step="0.01" style="text-align:right"
+        oninput="updUsExtra(${r.id},'qty',this.value)" placeholder="0"></td>
+      <td><button class="del-btn" onclick="delUsExtra(${r.id})">✕</button></td>
+    </tr>`).join('');
+  // restore select values
+  usExtraRows.forEach(r => {
+    const row = document.getElementById('uxr-'+r.id);
+    if(!row) return;
+    row.querySelector('select').value = r.unit;
+  });
+}
+
+function updUsExtra(id, key, val) { const r=usExtraRows.find(x=>x.id===id); if(r) r[key]=val; }
+function delUsExtra(id) { usExtraRows=usExtraRows.filter(x=>x.id!==id); renderUsExtra(); }
+
+function onUsageTodayInput(input) {
+  const yest = parseFloat(input.dataset.yest) || 0;
+  const today = parseFloat(input.value);
+  const consEl = g('cons-' + input.dataset.id);
+  if(!isNaN(today) && input.value !== '') {
+    const cons = yest - today;
+    if(consEl) {
+      consEl.textContent = cons.toFixed(2);
+      consEl.style.color = cons > 0 ? 'var(--accent)' : cons < 0 ? 'var(--danger)' : 'var(--text3)';
+    }
+    input.closest('tr').classList.toggle('changed', true);
+  } else {
+    if(consEl) { consEl.textContent = '—'; consEl.style.color = 'var(--text2)'; }
+    input.closest('tr').classList.remove('changed');
+  }
+}
+
+function clearUsageQty() {
+  document.querySelectorAll('#us-body input[type=number]').forEach(i=>{
+    i.value='';
+    i.closest('tr').classList.remove('changed');
+    const consEl = g('cons-' + i.dataset.id);
+    if(consEl) { consEl.textContent='—'; consEl.style.color='var(--text2)'; }
+  });
+  usExtraRows=[]; renderUsExtra();
+}
+
+async function submitUsage() {
+  const err   = g('us-err');
+  const date  = gv('us-date');
+  const wh    = gv('us-wh');
+  const user  = gv('us-user');
+  const title = gv('us-title');
+  const note  = gv('us-note');
+  const day   = gv('us-day');
+  if(!date) return showErr(err,'請填寫日期');
+  if(!wh)   return showErr(err,'請選擇倉庫');
+
+  // 固定清單中有填今日庫存的列
+  const fixedInputs = [...document.querySelectorAll('#us-body input[type=number]')]
+    .filter(i => i.value !== '' && i.value !== null);
+  // 臨時品項中有填名稱+數量的列
+  const extraValid = usExtraRows.filter(r => r.name.trim() && parseFloat(r.qty)>0);
+
+  if(!fixedInputs.length && !extraValid.length) return showErr(err,'請至少填寫一筆今日庫存數量');
+  err.style.display='none';
+
+  const baseData = { '標題':title, '日期':date, '星期':day, '建檔人員':user, '特別備註':note, '倉庫名稱':wh };
+  let count = 0;
+  try {
+    for(const input of fixedInputs){
+      const yest = parseFloat(input.dataset.yest)||0;
+      const todayQty = parseFloat(input.value);
+      const cons = yest - todayQty;
+      await post({ action:'append', tab:'usage', data:{
+        ...baseData,
+        '商品名稱': input.dataset.name,
+        '庫存編號': input.dataset.id,
+        '商品編號': input.dataset.code,
+        '昨日庫存': yest,
+        '今日庫存': todayQty,
+        '消耗數量': cons,
+        '單位': input.dataset.unit,
+        '規格': input.dataset.spec,
+      }});
+      count++;
+    }
+    for(const r of extraValid){
+      await post({ action:'append', tab:'usage', data:{
+        ...baseData,
+        '商品名稱': r.name.trim(),
+        '庫存編號': '',
+        '商品編號': r.code,
+        '消耗數量': parseFloat(r.qty),
+        '單位': r.unit,
+        '規格': r.spec,
+      }});
+      count++;
+    }
+    // 送出消耗記錄後，同步更新庫存總覽並寫入物料更新紀錄
+    if(fixedInputs.length > 0) {
+      await post({
+        action: 'updateInventory',
+        data: {
+          items: fixedInputs.map(input => ({
+            '庫存編號': input.dataset.id,
+            '今日庫存': parseFloat(input.value),
+          }))
+        }
+      });
+    }
+    toast(`使用記錄送出成功（${count} 筆）`,'ok');
+    clearUsageQty();
+    syncAll();
+  } catch(e) { showErr(err, e.message); }
+}
+
+// ═══════════════════════════════════════
+// PURCHASE LOG
+// ═══════════════════════════════════════
+function filterPL() {
+  const q  = gv('pl-q').toLowerCase();
+  const tp = gv('pl-type');
+  const df = gv('pl-df');
+  const dt = gv('pl-dt');
+  F.purchase = D.purchase.filter(r=>{
+    if(q && !(r['食材名稱']||'').toLowerCase().includes(q)) return false;
+    const type = r['進貨&生産']||r['進貨&生產']||'';
+    if(tp && type!==tp) return false;
+    const d = String(r['日期']||'').slice(0,10);
+    if(df && d<df) return false;
+    if(dt && d>dt) return false;
+    return true;
+  });
+  PG.purchase=1; renderPL();
+}
+
+function renderPL() {
+  const rows = F.purchase;
+  const slice= rows.slice((PG.purchase-1)*PS, PG.purchase*PS);
+  g('pl-body').innerHTML = slice.length ? slice.map(r=>{
+    const tp = r['進貨&生産']||r['進貨&生產']||'';
+    const tB = tp==='進貨'?'<span class="badge info">進貨</span>':tp==='生產'?'<span class="badge ok">生產</span>':`<span class="badge gray">${tp||'—'}</span>`;
+    return `<tr>
+      <td><strong>${r['食材名稱']||'—'}</strong></td>
+      <td>${tB}</td>
+      <td class="dim">${r['星期']||'—'}</td>
+      <td class="mono">${String(r['日期']||'').slice(0,10)||'—'}</td>
+      <td class="mono dim">${r['時間']||'—'}</td>
+      <td class="dim">${r['建檔人員']||'—'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" class="empty-st">無符合條件的資料</td></tr>`;
+  mkPgn('pl-pgn',rows.length,PG.purchase,n=>{PG.purchase=n;renderPL();});
+}
+
+// ═══════════════════════════════════════
+// CONSUMPTION
+// ═══════════════════════════════════════
+function filterCo() {
+  const q  = gv('co-q').toLowerCase();
+  const df = gv('co-df');
+  const dt = gv('co-dt');
+  F.consumption = D.consumption.filter(r=>{
+    if(q && !(`${r['商品名稱']||''} ${r['庫存編號']||''}`).toLowerCase().includes(q)) return false;
+    const d=String(r['日期']||'').slice(0,10);
+    if(df&&d<df) return false;
+    if(dt&&d>dt) return false;
+    return true;
+  });
+  PG.consumption=1; renderCo();
+}
+
+function renderCo() {
+  const rows = F.consumption;
+  const slice= rows.slice((PG.consumption-1)*PS, PG.consumption*PS);
+  g('co-body').innerHTML = slice.length ? slice.map(r=>`<tr>
+    <td class="mono">${String(r['日期']||'').slice(0,10)||'—'}</td>
+    <td class="dim">${r['星期']||'—'}</td>
+    <td class="mono dim">${r['庫存編號']||'—'}</td>
+    <td>${r['商品名稱']||'—'}</td>
+    <td class="r">${r['消耗數量']??'—'}</td>
+    <td class="dim">${r['單位']||'—'}</td>
+    <td class="dim mono">${r['規格']||'—'}</td>
+  </tr>`).join('') : `<tr><td colspan="7" class="empty-st">無符合條件的資料</td></tr>`;
+  mkPgn('co-pgn',rows.length,PG.consumption,n=>{PG.consumption=n;renderCo();});
+}
+
+// ═══════════════════════════════════════
+// STOCK UPDATE LOG
+// ═══════════════════════════════════════
+function filterSU() {
+  const q  = gv('su-q').toLowerCase();
+  const df = gv('su-df');
+  const dt = gv('su-dt');
+  F.stockUpdate = D.stockUpdate.filter(r=>{
+    const name = (r['商品名稱']||'').toLowerCase();
+    const wh   = (r['倉庫編號']||r['倉庫名稱']||'').toLowerCase();
+    if(q && !name.includes(q) && !wh.includes(q)) return false;
+    const d = String(r['日期時間']||r['日期']||'').slice(0,10);
+    if(df && d<df) return false;
+    if(dt && d>dt) return false;
+    return true;
+  });
+  PG.stockUpdate=1; renderSU();
+}
+
+function renderSU() {
+  const rows  = F.stockUpdate;
+  const slice = rows.slice((PG.stockUpdate-1)*PS, PG.stockUpdate*PS);
+  g('su-body').innerHTML = slice.length ? slice.map(r=>{
+    const oldQ = parseFloat(r['舊的數量']??r['舊數量']);
+    const newQ = parseFloat(r['新的數量']??r['新數量']);
+    const diff = (!isNaN(oldQ)&&!isNaN(newQ)) ? newQ-oldQ : null;
+    const diffStr = diff===null ? '—' :
+      diff>0 ? `<span style="color:var(--accent)">+${diff}</span>` :
+      diff<0 ? `<span style="color:var(--danger)">${diff}</span>` : '0';
+    return `<tr>
+      <td class="mono">${r['日期時間']||r['日期']||'—'}</td>
+      <td class="r mono">${r['更新筆數']??'—'}</td>
+      <td class="mono dim">${r['倉庫編號']||r['倉庫名稱']||'—'}</td>
+      <td><strong>${r['商品名稱']||'—'}</strong></td>
+      <td class="r mono">${isNaN(oldQ)?'—':oldQ}</td>
+      <td class="r mono">${isNaN(newQ)?'—':newQ} ${diffStr}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" class="empty-st">無符合條件的資料</td></tr>`;
+  mkPgn('su-pgn',rows.length,PG.stockUpdate,n=>{PG.stockUpdate=n;renderSU();});
+}
+
+// ═══════════════════════════════════════
+// API CONFIG
+// ═══════════════════════════════════════
+function saveUrl() {
+  const url = g('api-input').value.trim();
+  if(!url) return toast('請輸入 URL','err');
+  API=url; localStorage.setItem('inv_api',url);
+  g('cfg-banner').style.display='none';
+  syncAll();
+}
+async function testConn() {
+  const url = g('api-input').value.trim();
+  if(!url) return toast('請先輸入 URL','err');
+  try{
+    const r=await fetch(`${url}?action=ping`);
+    const d=await r.json();
+    d.ok?toast('連線成功！','ok'):(()=>{throw new Error(JSON.stringify(d))})();
+  }catch(e){toast('連線失敗：'+e.message,'err');}
+}
+
+// ═══════════════════════════════════════
+// PAGINATION
+// ═══════════════════════════════════════
+function mkPgn(id,total,cur,cb){
+  const pages=Math.ceil(total/PS);
+  const el=g(id); if(!el) return;
+  if(pages<=1){el.innerHTML=`<span class="pgn-info">${total} 筆</span>`;return;}
+  const range=[];
+  for(let i=1;i<=pages;i++){
+    if(i===1||i===pages||Math.abs(i-cur)<=1) range.push(i);
+    else if(range[range.length-1]!=='…') range.push('…');
+  }
+  el.innerHTML=`<span class="pgn-info">${total} 筆</span>`+
+    range.map(p=>p==='…'?`<span class="pgn-btn" style="border:none;cursor:default">…</span>`
+      :`<button class="pgn-btn ${p===cur?'on':''}" onclick="(${cb.toString()})(${p})">${p}</button>`).join('');
+}
+
+// ═══════════════════════════════════════
+// PEOPLE DROPDOWNS
+// ═══════════════════════════════════════
+const PEOPLE_KEY = 'inv_people';
+let peopleList = JSON.parse(localStorage.getItem(PEOPLE_KEY) || '["蘇上元","吳秀貞","吳傳皓"]');
+
+function savePeople() { localStorage.setItem(PEOPLE_KEY, JSON.stringify(peopleList)); }
+
+function initPeopleDropdowns() {
+  ['rc-user','tr-user','tr-driver','us-user'].forEach(id => {
+    const el = g(id); if(!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">— 選擇 —</option>' +
+      peopleList.map(n=>`<option value="${n}">${n}</option>`).join('') +
+      '<option value="__add__">＋ 新增姓名...</option>';
+    if(cur && cur !== '__add__') el.value = cur;
+    // Only attach listener once
+    if(!el.dataset.hasAddListener) {
+      el.dataset.hasAddListener = '1';
+      el.addEventListener('change', function() {
+        if(this.value === '__add__') {
+          const name = prompt('輸入新姓名：');
+          if(name && name.trim()) {
+            peopleList.push(name.trim());
+            savePeople();
+            initPeopleDropdowns();
+            this.value = name.trim();
+          } else {
+            this.value = '';
+          }
+        }
+      });
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════
+const g  = id => document.getElementById(id);
+const gv = id => document.getElementById(id)?.value||'';
+function showErr(el,msg){el.textContent=msg;el.style.display='block';}
+let toastTmr;
+function toast(msg,type=''){
+  const el=g('toast');el.textContent=msg;
+  el.className='show'+(type?' '+type:'');
+  clearTimeout(toastTmr);toastTmr=setTimeout(()=>el.className='',3200);
+}
+</script>
+</body>
+</html>

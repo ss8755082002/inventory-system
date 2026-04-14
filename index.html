@@ -642,8 +642,8 @@ function renderAll() {
 // DROPDOWNS
 // ═══════════════════════════════════════
 function buildDropdowns() {
-  const whs  = [...new Set(D.inventory.map(r => (r['倉庫名稱']||'').trim()).filter(Boolean))];
-  const wh2  = [...new Set(D.inventory.map(r => (r['倉庫代碼']||r['倉庫名稱']||'').trim()).filter(Boolean))];
+  const whs  = [...new Set(D.inventory.map(r => String(r['倉庫名稱']||'').trim()).filter(Boolean))];
+  const wh2  = [...new Set(D.inventory.map(r => String(r['倉庫代碼']||r['倉庫名稱']||'').trim()).filter(Boolean))];
   const codes= [...new Set([...whs,...wh2])];
 
   setOpts('inv-wh',  whs.map(w=>[w,w]), '全部倉庫');
@@ -706,7 +706,7 @@ function filterInv() {
   const fl = gv('inv-flag');
   F.inventory = D.inventory.filter(r => {
     if (q && !(`${r['商品名稱']||''} ${r['庫存編號']||''} ${r['商品編號']||''}`).toLowerCase().includes(q)) return false;
-    if (wh  && (r['倉庫名稱']||'').trim() !== wh)  return false;
+    if (wh  && String(r['倉庫名稱']||'').trim() !== wh)  return false;
     const st = stockStatus(r);
     if (fl === 'danger' && st !== 'danger') return false;
     if (fl === 'zero'   && st !== 'zero')   return false;
@@ -770,7 +770,7 @@ function updateRcWhFilter() {
 function getRcFilteredItems() {
   const wh = gv('rc-filter-wh');
   if (!wh) return D.inventory;
-  return D.inventory.filter(r => (r['倉庫名稱']||'').trim() === wh.trim() || (r['倉庫代碼']||'').trim() === wh.trim());
+  return D.inventory.filter(r => String(r['倉庫名稱']||'').trim() === wh.trim() || String(r['倉庫代碼']||'').trim() === wh.trim());
 }
 
 function renderRcRows() {
@@ -936,7 +936,7 @@ function rebuildTransferList() {
   if(!from){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">請先選擇出庫倉庫</td></tr>`; return; }
 
   const items = D.inventory
-    .filter(r => (r['倉庫代碼']||r['倉庫名稱']||'').trim() == from.trim() || (r['倉庫名稱']||'').trim() == from.trim())
+    .filter(r => String(r['倉庫代碼']||r['倉庫名稱']||'').trim() == from.trim() || String(r['倉庫名稱']||'').trim() == from.trim())
     .sort((a,b)=> (parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
 
   if(!items.length){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }
@@ -1075,7 +1075,7 @@ function rebuildUsageList() {
   if(!wh){ g('us-body').innerHTML=`<tr><td colspan="8" class="empty-st">請先選擇倉庫</td></tr>`; return; }
 
   const items = D.inventory
-    .filter(r => (r['倉庫名稱']||'').trim()==wh.trim())
+    .filter(r => String(r['倉庫名稱']||'').trim()==wh.trim())
     .sort((a,b)=> (parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
 
   if(!items.length){ g('us-body').innerHTML=`<tr><td colspan="8" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }

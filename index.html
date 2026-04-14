@@ -625,24 +625,48 @@ function nav(name) {
 // API
 // ═══════════════════════════════════════
 async function fetchTab(tab) {
-  const r = await fetch(`${API}?tab=${tab}`);
-  const d = await r.json();
-  if (d.error) throw new Error(d.error);
-  return d.rows || [];
+  // GAS 偶爾回傳 HTML 錯誤頁而非 JSON，用 text() 先接再解析
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000); // 15秒超時
+  try {
+    const r = await fetch(`${API}?tab=${tab}`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    const text = await r.text();
+    let d;
+    try { d = JSON.parse(text); } catch(e) {
+      console.warn(`[${tab}] 非 JSON 回應:`, text.slice(0,300));
+      return [];
+    }
+    if (d.error) { console.warn(`[${tab}] 錯誤:`, d.error); return []; }
+    return d.rows || [];
+  } catch(e) {
+    clearTimeout(timer);
+    console.warn(`[${tab}] fetch 失敗:`, e.message);
+    return [];
+  }
 }
+
 async function post(payload) {
-  // GAS Web App 不支援 CORS preflight（OPTIONS）。
-  // 使用 text/plain 避免瀏覽器送出 preflight，GAS 的 e.postData.contents 仍可正常讀取 JSON。
-  const r = await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
-  });
-  const text = await r.text();
-  let d;
-  try { d = JSON.parse(text); } catch(err) { throw new Error('回應格式錯誤：' + text.slice(0,200)); }
-  if (d.error) throw new Error(d.error);
-  return d;
+  // 使用 text/plain 避免 CORS preflight（GAS 不支援 OPTIONS）
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    let d;
+    try { d = JSON.parse(text); } catch(err) { throw new Error('回應格式錯誤：' + text.slice(0,200)); }
+    if (d.error) throw new Error(d.error);
+    return d;
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
 }
 
 // ═══════════════════════════════════════
@@ -650,24 +674,47 @@ async function post(payload) {
 // ═══════════════════════════════════════
 async function syncAll() {
   if (!API) return;
-  try {
-    const [inv, pur, del, use, bom, con, su] = await Promise.all([
-      fetchTab('inventory').catch(()=>[]),
-      fetchTab('purchase').catch(()=>[]),
-      fetchTab('delivery').catch(()=>[]),
-      fetchTab('usage').catch(()=>[]),
-      fetchTab('bom').catch(()=>[]),
-      fetchTab('consumption').catch(()=>[]),
-      fetchTab('stockUpdate').catch(()=>[]),
-    ]);
-    D.inventory = inv; D.purchase = pur; D.delivery = del;
-    D.usageLog = use; D.bom = bom; D.consumption = con; D.stockUpdate = su;
-    g('sync-info').textContent = '同步 ' + new Date().toLocaleTimeString('zh-TW');
-    buildDropdowns();
-    F = { inventory:[...inv], purchase:[...pur], consumption:[...con], stockUpdate:[...su] };
-    renderAll();
-    toast('同步完成','ok');
-  } catch(e) { toast('同步失敗：' + e.message,'err'); }
+  g('sync-info').textContent = '同步中...';
+  toast('資料同步中，請稍候…');
+
+  // GAS 並發請求過多容易觸發 quota，改為逐一取得
+  const tabs = [
+    ['inventory',  'inventory'],
+    ['purchase',   'purchase'],
+    ['delivery',   'delivery'],
+    ['usage',      'usageLog'],
+    ['bom',        'bom'],
+    ['consumption','consumption'],
+    ['stockUpdate','stockUpdate'],
+  ];
+
+  let anyOk = false;
+  for (const [tab, key] of tabs) {
+    try {
+      const rows = await fetchTab(tab);
+      D[key] = rows;
+      if (rows.length > 0) anyOk = true;
+    } catch(e) {
+      console.warn('syncAll tab失敗:', tab, e.message);
+      D[key] = D[key] || [];
+    }
+  }
+
+  g('sync-info').textContent = '同步 ' + new Date().toLocaleTimeString('zh-TW');
+  buildDropdowns();
+  F = {
+    inventory:   [...D.inventory],
+    purchase:    [...D.purchase],
+    consumption: [...D.consumption],
+    stockUpdate: [...D.stockUpdate]
+  };
+  renderAll();
+
+  if (anyOk) {
+    toast('同步完成', 'ok');
+  } else {
+    toast('⚠ 同步完成但所有分頁資料為空，請確認 GAS URL 與分頁名稱', 'err');
+  }
 }
 
 function renderAll() {
@@ -1567,11 +1614,20 @@ function saveUrl() {
 async function testConn() {
   const url = g('api-input').value.trim();
   if(!url) return toast('請先輸入 URL','err');
+  toast('測試連線中…');
   try{
-    const r=await fetch(`${url}?action=ping`);
-    const d=await r.json();
-    d.ok?toast('連線成功！','ok'):(()=>{throw new Error(JSON.stringify(d))})();
-  }catch(e){toast('連線失敗：'+e.message,'err');}
+    const r = await fetch(`${url}?action=ping`);
+    const text = await r.text();
+    let d;
+    try { d = JSON.parse(text); } catch(e) {
+      return toast('連線失敗：回應非 JSON，可能 GAS 未部署或 URL 錯誤。回應：' + text.slice(0,80), 'err');
+    }
+    if(d.ok) {
+      toast('✓ 連線成功！GAS 回應正常', 'ok');
+    } else {
+      toast('⚠ GAS 回應異常：' + JSON.stringify(d), 'err');
+    }
+  } catch(e){ toast('連線失敗：' + e.message + '（請確認 GAS 已部署為「任何人」可存取）','err'); }
 }
 
 // ═══════════════════════════════════════

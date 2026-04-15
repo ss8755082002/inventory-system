@@ -324,9 +324,13 @@ label .req-star{font-size:12px}
         <div class="bom-panel">
           <div style="font-size:12px;color:var(--text2);margin-bottom:8px">計算用量可手動調整，作為實際消耗量記錄：</div>
           <table class="bom-rt">
-            <thead><tr><th>#</th><th>子物料名稱</th><th class="r">使用量</th><th>單位消耗</th><th>單位</th><th>子物料編號</th><th>規格</th></tr></thead>
+            <thead><tr><th>#</th><th>子物料名稱</th><th class="r">使用量</th><th>單位消耗</th><th>單位</th><th>子物料編號</th><th>規格</th><th>倉庫編號</th></tr></thead>
             <tbody id="bom-expand-body"></tbody>
           </table>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          <button class="btn sm" onclick="closeBomExpand()">收起</button>
+          <button class="btn sm green" id="bom-submit-btn" onclick="submitBomDeduct()">✓ 送出 BOM 用料扣庫存</button>
         </div>
       </div>
       <button class="add-row-btn" onclick="addRcRow()">＋ 新增一行</button>
@@ -1092,23 +1096,25 @@ function expandBom(rowId) {
   const base  = parseFloat(lines[0]['生產數量'])||1;
   const qty   = parseFloat(r.qty)||1;
   const ratio = qty/base;
-  // 用單標題：BOM編號 + 子物料名稱（成品名稱）
   const bomName = lines[0]['成品名稱']||lines[0]['BOM名稱']||lines[0]['產品名稱']||lines[0]['物料名稱']||'';
   g('bom-expand-title').textContent = `${r.bom}　${bomName}`;
+  const whOpts = ['195','317','大野'].map(w=>`<option value="${w}" ${w==='317'?'selected':''}>${w}</option>`).join('');
   g('bom-expand-body').innerHTML = lines.map((l,i)=>{
-    const unitConsume = parseFloat(l['用量'])||0;       // 單位消耗
-    const useQty = (unitConsume * ratio).toFixed(4);   // 使用量 = 填入數量 × 單位消耗
+    const unitConsume = parseFloat(l['用量'])||0;
+    const useQty = (unitConsume * ratio).toFixed(2);         // 使用量：小數後兩位
+    const unitConsumeDisplay = unitConsume.toFixed(2);       // 單位消耗：小數後兩位
     return `<tr>
       <td class="idx">${i+1}</td>
       <td><strong>${l['子物料名稱']||'—'}</strong></td>
       <td class="r">
         <input type="number" style="width:90px;text-align:right;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;font-size:12px"
-          value="${useQty}" step="0.0001" data-mat="${l['子物料編號']}" data-name="${l['子物料名稱']||''}">
+          value="${useQty}" step="0.01" data-mat="${l['子物料編號']}" data-name="${l['子物料名稱']||''}">
       </td>
-      <td class="mono dim">${fmtQty(unitConsume)}</td>
+      <td class="mono dim">${unitConsumeDisplay}</td>
       <td class="dim">${l['子單位']||'—'}</td>
       <td class="mono dim" style="font-size:11px">${l['子物料編號']||'—'}</td>
       <td class="dim mono" style="font-size:11px">${l['子規格']||'—'}</td>
+      <td><select style="font-size:12px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px" data-role="wh">${whOpts}</select></td>
     </tr>`;
   }).join('');
   g('bom-expand-area').style.display='block';
@@ -1119,6 +1125,32 @@ function closeBomExpand() {
   activeBomRowId = null;
   g('bom-expand-area').style.display='none';
   g('bom-expand-body').innerHTML='';
+}
+
+// 送出 BOM 用料單扣庫存
+async function submitBomDeduct() {
+  if(!API) return toast('請先設定 API URL','err');
+  const rows = [...document.querySelectorAll('#bom-expand-body tr')];
+  const materials = rows.map(tr=>{
+    const input = tr.querySelector('input[type=number]');
+    const whSel = tr.querySelector('[data-role=wh]');
+    const matCode = input?.dataset?.mat||'';
+    const useQty  = parseFloat(input?.value||0);
+    const wh      = whSel?.value||'317';
+    return { '子物料編號': matCode, '倉庫編號': wh, '使用量': useQty };
+  }).filter(m => m['子物料編號'] && m['使用量'] > 0);
+
+  if(!materials.length) return toast('沒有可扣除的用料（使用量需 > 0）','err');
+
+  const btn = g('bom-submit-btn');
+  if(btn){ btn.classList.add('loading'); btn.textContent='送出中...'; }
+  try {
+    const res = await post({ action:'bomDeduct', data:{ materials }});
+    toast(`BOM 用料已扣除（更新庫存 ${res.updated||0} 項）`,'ok');
+    closeBomExpand();
+    syncAll();
+  } catch(e) { toast('BOM 扣庫存失敗：'+e.message,'err'); }
+  finally { if(btn){ btn.classList.remove('loading'); btn.innerHTML='✓ 送出 BOM 用料扣庫存'; } }
 }
 
 // recalc BOM when qty changes (called via oninput on qty field)
@@ -1532,7 +1564,7 @@ function filterPL() {
     if(df && d<df) return false;
     if(dt && d>dt) return false;
     return true;
-  }).reverse(); // 最新在最上面
+  }); // GAS v2.3 已在伺服器端倒序，無需再 reverse
   PG.purchase=1; renderPL();
 }
 
@@ -1572,7 +1604,7 @@ function filterDL() {
     if(df && d<df) return false;
     if(dt && d>dt) return false;
     return true;
-  }).slice().reverse(); // 最新在最上面
+  }); // GAS v2.3 已在伺服器端倒序
   PG.delivery=1; renderDL();
 }
 
@@ -1639,7 +1671,7 @@ function filterCo() {
     if(df&&d<df) return false;
     if(dt&&d>dt) return false;
     return true;
-  }).slice().reverse(); // 最新在最上面
+  }); // GAS v2.3 已在伺服器端倒序
   PG.consumption=1; renderCo();
 }
 
@@ -1747,7 +1779,7 @@ function filterSU() {
     if(df && d<df) return false;
     if(dt && d>dt) return false;
     return true;
-  }).reverse(); // 最新在最上面
+  }); // GAS v2.3 已在伺服器端倒序
   PG.stockUpdate=1; renderSU();
 }
 

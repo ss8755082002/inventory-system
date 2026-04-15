@@ -2,6 +2,10 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<!-- v2026-04-14T15:39:28.568Z -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>庫存管理系統</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -204,6 +208,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   <div class="sb-bottom">
     <div class="sync-info" id="sync-info">尚未同步</div>
     <button class="btn-resync" onclick="syncAll()">↻ 重新同步</button>
+    <button class="btn-resync" style="margin-top:4px;font-size:11px;opacity:.7" onclick="cacheClear();syncAll(true)">⟳ 強制重新載入</button>
   </div>
 </aside>
 
@@ -436,10 +441,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
           <thead>
             <tr>
               <th class="idx">#</th>
-              <th style="min-width:120px">商品名稱 *</th>
+              <th style="min-width:180px">食材名稱 *</th>
               <th style="min-width:80px">商品編號</th>
               <th style="min-width:90px">規格</th>
-              <th style="min-width:70px">單位</th>
+              <th style="min-width:60px">單位</th>
               <th style="min-width:90px;text-align:right">使用數量 *</th>
               <th style="width:36px"></th>
             </tr>
@@ -547,6 +552,14 @@ const PS = 100;
 const DAYS = ['日','一','二','三','四','五','六'];
 // 倉庫代碼清單（固定三個）
 const WH_CODES = ['195','317','大野'];
+
+// 台灣時間字串 yyyy-MM-dd HH:mm:ss
+function twTime() {
+  return new Date().toLocaleString('sv-SE', {timeZone:'Asia/Taipei'}).replace('T',' ');
+}
+function twTimeShort() {
+  return new Date().toLocaleString('sv-SE', {timeZone:'Asia/Taipei'}).slice(11,19);
+}
 
 // 數量格式化：最多2位小數，尾零不顯示
 function fmtQty(v) {
@@ -670,35 +683,60 @@ async function post(payload) {
 }
 
 // ═══════════════════════════════════════
-// SYNC
+// SYNC — 靜態分頁快取於 localStorage，動態分頁並行 fetch
 // ═══════════════════════════════════════
-async function syncAll() {
+const STATIC_TABS  = ['inventory','bom'];          // 幾乎不變動
+const DYNAMIC_TABS = ['purchase','consumption','stockUpdate']; // 需即時
+const CACHE_TTL    = 5 * 60 * 1000; // 靜態快取 5 分鐘
+
+function cacheGet(key) {
+  try {
+    const v = localStorage.getItem('inv_cache_' + key);
+    if (!v) return null;
+    const obj = JSON.parse(v);
+    if (Date.now() - obj.ts > CACHE_TTL) return null;
+    return obj.rows;
+  } catch(e) { return null; }
+}
+function cacheSet(key, rows) {
+  try { localStorage.setItem('inv_cache_' + key, JSON.stringify({ts:Date.now(), rows})); } catch(e){}
+}
+function cacheClear() {
+  STATIC_TABS.forEach(k => localStorage.removeItem('inv_cache_' + k));
+}
+
+async function syncAll(forceRefresh) {
   if (!API) return;
   g('sync-info').textContent = '同步中...';
-  toast('資料同步中，請稍候…');
 
-  // GAS 並發請求過多容易觸發 quota，改為逐一取得
-  const tabs = [
-    ['inventory',  'inventory'],
-    ['purchase',   'purchase'],
-    ['delivery',   'delivery'],
-    ['usage',      'usageLog'],
-    ['bom',        'bom'],
-    ['consumption','consumption'],
-    ['stockUpdate','stockUpdate'],
-  ];
-
-  let anyOk = false;
-  for (const [tab, key] of tabs) {
-    try {
+  // 1. 靜態分頁：先從快取讀，若過期才重新 fetch
+  for (const tab of STATIC_TABS) {
+    const cached = forceRefresh ? null : cacheGet(tab);
+    if (cached) {
+      const key = tab === 'inventory' ? 'inventory' : tab;
+      D[key] = cached;
+    } else {
       const rows = await fetchTab(tab);
+      const key  = tab === 'inventory' ? 'inventory' : tab;
       D[key] = rows;
-      if (rows.length > 0) anyOk = true;
-    } catch(e) {
-      console.warn('syncAll tab失敗:', tab, e.message);
-      D[key] = D[key] || [];
+      if (rows.length) cacheSet(tab, rows);
     }
   }
+
+  // 2. 動態分頁：並行 fetch（只有3個，不觸發 quota）
+  const dynamicMap = {
+    purchase:    'purchase',
+    consumption: 'consumption',
+    stockUpdate: 'stockUpdate',
+  };
+  const results = await Promise.all(
+    DYNAMIC_TABS.map(tab => fetchTab(tab).then(rows => [tab, rows]))
+  );
+  results.forEach(([tab, rows]) => { D[dynamicMap[tab]] = rows; });
+
+  // 3. delivery & usageLog：background fetch（不阻塞 UI）
+  fetchTab('delivery').then(r => { D.delivery = r; }).catch(()=>{});
+  fetchTab('usage').then(r => { D.usageLog = r; }).catch(()=>{});
 
   g('sync-info').textContent = '同步 ' + new Date().toLocaleTimeString('zh-TW');
   buildDropdowns();
@@ -706,15 +744,11 @@ async function syncAll() {
     inventory:   [...D.inventory],
     purchase:    [...D.purchase],
     consumption: [...D.consumption],
-    stockUpdate: [...D.stockUpdate]
+    stockUpdate: [...D.stockUpdate],
   };
   renderAll();
-
-  if (anyOk) {
-    toast('同步完成', 'ok');
-  } else {
-    toast('⚠ 同步完成但所有分頁資料為空，請確認 GAS URL 與分頁名稱', 'err');
-  }
+  const anyOk = D.inventory.length > 0 || D.purchase.length > 0;
+  toast(anyOk ? '同步完成' : '⚠ 資料為空，請確認 GAS URL 與分頁名稱', anyOk ? 'ok' : 'err');
 }
 
 function renderAll() {
@@ -1047,10 +1081,11 @@ async function submitReceive() {
   const day  = gv('rc-day');
   const valid= rcRows.filter(r=>r.name.trim()&&parseFloat(r.qty)>0);
   if(!date)         return showErr(err,'請填寫日期');
+  if(!user)         return showErr(err,'請選擇建檔人員（必填）');
   if(!valid.length) return showErr(err,'請至少填寫一筆有食材名稱和數量的記錄');
   err.style.display='none';
   try {
-    // 使用新的 appendReceiveAndUpdateStock action：一次送出進貨紀錄並同步更新庫存
+    const recTime = twTime();
     const rows = valid.map(r => ({
       '食材名稱':       r.name.trim(),
       '進貨&生產':      r.type,
@@ -1061,16 +1096,12 @@ async function submitReceive() {
       '入庫規格':       r.spec,
       'BOM編號':        r.bom,
       '簽核':           'N',
-      '庫存編號':       r.invId,  // 供後端更新庫存用
+      '庫存編號':       r.invId,
     }));
-    const twNow2 = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const recTime = twNow2.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
     const baseData = { '日期': date, '星期': day, '建檔人員': user, '建檔時間': recTime };
     const res = await post({ action:'appendReceiveAndUpdateStock', data:{ rows, baseData }});
     toast(`進貨送出成功（${res.appended||valid.length} 筆），庫存已更新 ${res.updated||0} 項`,'ok');
-    clearRcRows();
-    closeBomExpand();
-    syncAll();
+    clearRcRows(); closeBomExpand(); syncAll();
   } catch(e) { showErr(err, e.message); }
 }
 
@@ -1196,50 +1227,34 @@ async function submitTransfer() {
   const user   = gv('tr-user');
   const driver = gv('tr-driver');
   const time   = gv('tr-time');
-  if(!date) return showErr(err,'請填寫日期');
+  if(!date)   return showErr(err,'請填寫日期');
+  if(!user)   return showErr(err,'請選擇製單人員（必填）');
+  if(!driver) return showErr(err,'請選擇配送人員（必填）');
 
   const fixedRows  = [...document.querySelectorAll('#tr-body input[type=number]')].filter(i=>parseFloat(i.value)>0);
   const extraValid = trExtraRows.filter(r=>r.name.trim()&&parseFloat(r.qty)>0);
   if(!fixedRows.length && !extraValid.length) return showErr(err,'請至少填寫一筆配送數量');
   err.style.display='none';
 
-  const base = { '時間':time, '日期':date, '星期':gv('tr-day'), '製單人員':user, '配送人員':driver };
+  const recTime = twTime();
+  const base = { '時間':time, '建檔時間':recTime, '日期':date, '星期':gv('tr-day'), '製單人員':user, '配送人員':driver };
   let count=0;
   try {
-    // 整合成一次 POST：寫配送紀錄 + 扣庫存
     const rows = [];
     for(const input of fixedRows){
       const tr   = input.closest('tr');
       const from = tr.querySelector('[data-role=from]').value;
       const to   = tr.querySelector('[data-role=to]').value;
-      rows.push({
-        ...base,
-        '商品名稱':     input.dataset.name,
-        '庫存編號':     input.dataset.id,
-        '商品編號':     input.dataset.code,
-        '轉出倉庫代號': from,
-        '轉入倉庫代號': to,
-        '數量':         parseFloat(input.value),
-        '單位':         input.dataset.unit,
-      });
+      rows.push({ ...base, '商品名稱':input.dataset.name, '庫存編號':input.dataset.id, '商品編號':input.dataset.code, '轉出倉庫代號':from, '轉入倉庫代號':to, '數量':parseFloat(input.value), '單位':input.dataset.unit });
       count++;
     }
     for(const r of extraValid){
-      rows.push({
-        ...base,
-        '商品名稱': r.name.trim(),
-        '庫存編號': r.invId,
-        '轉出倉庫代號': r.from,
-        '轉入倉庫代號': r.to,
-        '數量': parseFloat(r.qty),
-        '單位': r.unit,
-      });
+      rows.push({ ...base, '商品名稱':r.name.trim(), '庫存編號':r.invId, '轉出倉庫代號':r.from, '轉入倉庫代號':r.to, '數量':parseFloat(r.qty), '單位':r.unit });
       count++;
     }
-    const res = await post({ action:'appendDeliveryAndUpdateStock', data:{ rows, baseData: base }});
+    const res = await post({ action:'appendDeliveryAndUpdateStock', data:{ rows, baseData:base }});
     toast(`配送單送出成功（${count} 筆），庫存已更新 ${res.updated||0} 項`,'ok');
-    clearTransferQty();
-    syncAll();
+    clearTransferQty(); syncAll();
   } catch(e) { showErr(err, e.message); }
 }
 
@@ -1287,32 +1302,59 @@ let usExtraRows = [];
 
 function addUsExtra() {
   const id = Date.now() + usExtraRows.length;
-  usExtraRows.push({ id, name:'', code:'', spec:'', unit:'', qty:'' });
+  usExtraRows.push({ id, invId:'', name:'', code:'', spec:'', unit:'', qty:'' });
   renderUsExtra();
 }
 
 function renderUsExtra() {
+  // 下拉選項：從庫存總覽取（以倉庫名稱含195為主）
+  const inv195 = D.inventory.filter(r => {
+    const wh = String(r['倉庫名稱']||r['倉庫代碼']||'');
+    return wh.includes('195');
+  }).sort((a,b)=>(parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
+  const invOpts = inv195.map(r =>
+    `<option value="${r['庫存編號']}">${r['商品名稱']||''} (${r['庫存編號']||''})</option>`
+  ).join('');
   const units = [...new Set(D.inventory.map(r=>r['單位']).filter(Boolean))];
   const uOpts = units.map(u=>`<option value="${u}">${u}</option>`).join('');
+
   g('us-extra-body').innerHTML = usExtraRows.map((r,i)=>`
     <tr id="uxr-${r.id}">
       <td class="idx">${i+1}</td>
-      <td><input value="${r.name}" oninput="updUsExtra(${r.id},'name',this.value)" placeholder="食材名稱"></td>
-      <td><input value="${r.code}" oninput="updUsExtra(${r.id},'code',this.value)" placeholder="商品編號"></td>
-      <td><input value="${r.spec}" oninput="updUsExtra(${r.id},'spec',this.value)" placeholder="規格"></td>
-      <td><select onchange="updUsExtra(${r.id},'unit',this.value)">
-        <option value="">—</option>${uOpts}
-      </select></td>
-      <td><input type="number" value="${r.qty}" min="0" step="0.01" style="text-align:right"
+      <td>
+        <select style="width:100%;font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px"
+          onchange="onUsExtraSelect(${r.id},this.value)">
+          <option value="">— 選擇食材 —</option>${invOpts}
+        </select>
+      </td>
+      <td><input value="${r.code}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td><input value="${r.spec}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td><input value="${r.unit}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td><input type="number" value="${r.qty}" min="0" step="0.01" style="text-align:right;font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;width:100%"
         oninput="updUsExtra(${r.id},'qty',this.value)" placeholder="0"></td>
       <td><button class="del-btn" onclick="delUsExtra(${r.id})">✕</button></td>
     </tr>`).join('');
   // restore select values
   usExtraRows.forEach(r => {
     const row = document.getElementById('uxr-'+r.id);
-    if(!row) return;
-    row.querySelector('select').value = r.unit;
+    if(!row || !r.invId) return;
+    const sel = row.querySelector('select');
+    if(sel) sel.value = r.invId;
   });
+}
+
+function onUsExtraSelect(id, invId) {
+  const r = usExtraRows.find(x=>x.id===id);
+  if(!r) return;
+  r.invId = invId;
+  const item = D.inventory.find(x=>x['庫存編號']===invId);
+  if(item) {
+    r.name = item['商品名稱']||'';
+    r.code = item['商品編號']||'';
+    r.spec = item['規格']||'';
+    r.unit = item['單位']||'';
+  }
+  renderUsExtra();
 }
 
 function updUsExtra(id, key, val) { const r=usExtraRows.find(x=>x.id===id); if(r) r[key]=val; }
@@ -1352,6 +1394,7 @@ async function submitUsage() {
   const day   = gv('us-day');
   if(!date) return showErr(err,'請填寫日期');
   if(!wh)   return showErr(err,'請選擇倉庫');
+  if(!user) return showErr(err,'請選擇建檔人員（必填）');
 
   // 固定清單中有填今日庫存的列
   const fixedInputs = [...document.querySelectorAll('#us-body input[type=number]')]
@@ -1362,7 +1405,8 @@ async function submitUsage() {
   if(!fixedInputs.length && !extraValid.length) return showErr(err,'請至少填寫一筆今日庫存數量');
   err.style.display='none';
 
-  const baseData = { '標題':title, '日期':date, '星期':day, '建檔人員':user, '特別備註':note, '倉庫名稱':wh };
+  const recTime = twTime();
+  const baseData = { '標題':title, '日期':date, '星期':day, '建檔人員':user, '特別備註':note, '倉庫名稱':wh, '建檔時間':recTime };
   let count = 0;
   try {
     for(const input of fixedInputs){
@@ -1428,7 +1472,7 @@ function filterPL() {
     if(df && d<df) return false;
     if(dt && d>dt) return false;
     return true;
-  });
+  }).reverse(); // 最新在最上面
   PG.purchase=1; renderPL();
 }
 
@@ -1467,7 +1511,7 @@ function filterCo() {
     if(df&&d<df) return false;
     if(dt&&d>dt) return false;
     return true;
-  });
+  }).slice().reverse(); // 最新在最上面
   PG.consumption=1; renderCo();
 }
 
@@ -1573,7 +1617,7 @@ function filterSU() {
     if(df && d<df) return false;
     if(dt && d>dt) return false;
     return true;
-  });
+  }).reverse(); // 最新在最上面
   PG.stockUpdate=1; renderSU();
 }
 

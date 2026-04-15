@@ -330,7 +330,7 @@ label .req-star{font-size:12px}
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
           <button class="btn sm" onclick="closeBomExpand()">收起</button>
-          <button class="btn sm green" id="bom-submit-btn" onclick="submitBomDeduct()">✓ 送出 BOM 用料扣庫存</button>
+          <button class="btn sm green" id="bom-submit-btn" onclick="submitReceiveAndBom()">✓ 送出進貨 ＋ 扣 BOM 用料</button>
         </div>
       </div>
       <button class="add-row-btn" onclick="addRcRow()">＋ 新增一行</button>
@@ -1101,8 +1101,9 @@ function expandBom(rowId) {
   const whOpts = ['195','317','大野'].map(w=>`<option value="${w}" ${w==='317'?'selected':''}>${w}</option>`).join('');
   g('bom-expand-body').innerHTML = lines.map((l,i)=>{
     const unitConsume = parseFloat(l['用量'])||0;
-    const useQty = (unitConsume * ratio).toFixed(2);         // 使用量：小數後兩位
-    const unitConsumeDisplay = unitConsume.toFixed(2);       // 單位消耗：小數後兩位
+    const useQtyNum = unitConsume * ratio;
+    const useQty = parseFloat(useQtyNum.toFixed(2));             // 去除尾零
+    const unitConsumeDisplay = parseFloat(unitConsume.toFixed(2)); // 去除尾零
     return `<tr>
       <td class="idx">${i+1}</td>
       <td><strong>${l['子物料名稱']||'—'}</strong></td>
@@ -1128,49 +1129,40 @@ function closeBomExpand() {
 }
 
 // 送出 BOM 用料單扣庫存
+// 送出 BOM 用料單扣庫存（單獨從 BOM 面板呼叫，已棄用，改由 submitReceiveAndBom 合併）
 async function submitBomDeduct() {
-  if(!API) return toast('請先設定 API URL','err');
-  const rows = [...document.querySelectorAll('#bom-expand-body tr')];
-  const materials = rows.map(tr=>{
+  return submitReceiveAndBom();
+}
+
+// 合併送出：進貨紀錄 ＋ BOM 用料扣庫存（同步進行）
+async function submitReceiveAndBom() {
+  const err  = g('rc-err');
+  const date = gv('rc-date');
+  const user = gv('rc-user');
+  const day  = gv('rc-day');
+  const valid = rcRows.filter(r=>r.name.trim()&&parseFloat(r.qty)>0);
+  if(!date)         return showErr(err,'請填寫日期');
+  if(!user)         return showErr(err,'請選擇建檔人員（必填）');
+  if(!valid.length) return showErr(err,'請至少填寫一筆有食材名稱和數量的記錄');
+  err.style.display='none';
+
+  // 收集 BOM 用料（允許負數，方便 debug）
+  const bomRows = [...document.querySelectorAll('#bom-expand-body tr')];
+  const materials = bomRows.map(tr=>{
     const input = tr.querySelector('input[type=number]');
     const whSel = tr.querySelector('[data-role=wh]');
     const matCode = input?.dataset?.mat||'';
     const useQty  = parseFloat(input?.value||0);
     const wh      = whSel?.value||'317';
     return { '子物料編號': matCode, '倉庫編號': wh, '使用量': useQty };
-  }).filter(m => m['子物料編號'] && m['使用量'] > 0);
+  }).filter(m => m['子物料編號'] && m['使用量'] !== 0); // 允許負數，只排除 0
 
-  if(!materials.length) return toast('沒有可扣除的用料（使用量需 > 0）','err');
+  const hasBom = materials.length > 0;
 
   const btn = g('bom-submit-btn');
-  if(btn){ btn.classList.add('loading'); btn.textContent='送出中...'; }
-  try {
-    const res = await post({ action:'bomDeduct', data:{ materials }});
-    toast(`BOM 用料已扣除（更新庫存 ${res.updated||0} 項）`,'ok');
-    closeBomExpand();
-    syncAll();
-  } catch(e) { toast('BOM 扣庫存失敗：'+e.message,'err'); }
-  finally { if(btn){ btn.classList.remove('loading'); btn.innerHTML='✓ 送出 BOM 用料扣庫存'; } }
-}
+  const mainBtn = document.querySelector('#page-receive .btn.green');
+  [btn, mainBtn].forEach(b=>{ if(b){ b.classList.add('loading'); b.textContent='送出中...'; }});
 
-// recalc BOM when qty changes (called via oninput on qty field)
-function updateRcRowAndRecalc(id, key, val) {
-  updateRcRow(id, key, val);
-  if(activeBomRowId===id) expandBom(id);
-}
-
-async function submitReceive() {
-  const err  = g('rc-err');
-  const date = gv('rc-date');
-  const user = gv('rc-user');
-  const day  = gv('rc-day');
-  const valid= rcRows.filter(r=>r.name.trim()&&parseFloat(r.qty)>0);
-  if(!date)         return showErr(err,'請填寫日期');
-  if(!user)         return showErr(err,'請選擇建檔人員（必填）');
-  if(!valid.length) return showErr(err,'請至少填寫一筆有食材名稱和數量的記錄');
-  err.style.display='none';
-  const btn = document.querySelector('#page-receive .btn.green');
-  if(btn){ btn.classList.add('loading'); btn.textContent='送出中...'; }
   try {
     const recTime = twTime();
     const rows = valid.map(r => ({
@@ -1186,11 +1178,36 @@ async function submitReceive() {
       '庫存編號':       r.invId,
     }));
     const baseData = { '日期': date, '星期': day, '建檔人員': user, '建檔時間': recTime };
+
+    // 1. 送出進貨紀錄
     const res = await post({ action:'appendReceiveAndUpdateStock', data:{ rows, baseData }});
-    toast(`進貨送出成功（${res.appended||valid.length} 筆），庫存已更新 ${res.updated||0} 項`,'ok');
+
+    // 2. 若有 BOM 用料，一併扣庫存
+    let bomUpdated = 0;
+    if(hasBom) {
+      const bomRes = await post({ action:'bomDeduct', data:{ materials }});
+      bomUpdated = bomRes.updated || 0;
+    }
+
+    const msg = hasBom
+      ? `進貨送出（${res.appended||valid.length} 筆）＋ BOM 扣料（${bomUpdated} 項）✓`
+      : `進貨送出成功（${res.appended||valid.length} 筆），庫存已更新 ${res.updated||0} 項`;
+    toast(msg,'ok');
     clearRcRows(); closeBomExpand(); syncAll();
   } catch(e) { showErr(err, e.message); }
-  finally { if(btn){ btn.classList.remove('loading'); btn.innerHTML='✓ 確認送出'; } }
+  finally {
+    [btn, mainBtn].forEach(b=>{ if(b){ b.classList.remove('loading'); b.innerHTML = b===mainBtn ? '✓ 確認送出' : '✓ 送出進貨 ＋ 扣 BOM 用料'; }});
+  }
+}
+
+// recalc BOM when qty changes (called via oninput on qty field)
+function updateRcRowAndRecalc(id, key, val) {
+  updateRcRow(id, key, val);
+  if(activeBomRowId===id) expandBom(id);
+}
+
+async function submitReceive() {
+  return submitReceiveAndBom();
 }
 
 // ═══════════════════════════════════════
@@ -1867,26 +1884,100 @@ function initPeopleDropdowns() {
     const cur = el.value;
     el.innerHTML = '<option value="">— 選擇 —</option>' +
       peopleList.map(n=>`<option value="${n}">${n}</option>`).join('') +
-      '<option value="__add__">＋ 新增姓名...</option>';
-    if(cur && cur !== '__add__') el.value = cur;
-    // Only attach listener once
+      '<option value="__add__">＋ 新增姓名...</option>' +
+      '<option value="__remove__">✕ 移除姓名...</option>';
+    if(cur && cur !== '__add__' && cur !== '__remove__') el.value = cur;
     if(!el.dataset.hasAddListener) {
       el.dataset.hasAddListener = '1';
       el.addEventListener('change', function() {
         if(this.value === '__add__') {
           const name = prompt('輸入新姓名：');
           if(name && name.trim()) {
-            peopleList.push(name.trim());
-            savePeople();
+            if(!peopleList.includes(name.trim())) {
+              peopleList.push(name.trim());
+              savePeople();
+            }
             initPeopleDropdowns();
             this.value = name.trim();
           } else {
             this.value = '';
           }
+        } else if(this.value === '__remove__') {
+          showPeopleManager();
+          this.value = '';
         }
       });
     }
   });
+}
+
+function showPeopleManager() {
+  // 建立或顯示人員管理 modal
+  let modal = g('people-modal');
+  if(!modal) {
+    modal = document.createElement('div');
+    modal.id = 'people-modal';
+    modal.className = 'modal-bg';
+    modal.innerHTML = `
+      <div class="modal" style="width:360px">
+        <div class="modal-hdr">
+          <h2>人員管理</h2>
+          <button class="modal-x" onclick="g('people-modal').classList.remove('open')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px">點擊姓名旁的 ✕ 可移除該人員</div>
+          <div id="people-list"></div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <input class="fi" id="people-new-input" placeholder="輸入新姓名" style="flex:1">
+            <button class="btn green sm" onclick="peopleAdd()">新增</button>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" onclick="g('people-modal').classList.remove('open')">關閉</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    g('people-new-input').addEventListener('keydown', e => { if(e.key==='Enter') peopleAdd(); });
+  }
+  renderPeopleList();
+  modal.classList.add('open');
+}
+
+function renderPeopleList() {
+  const el = g('people-list'); if(!el) return;
+  el.innerHTML = peopleList.length
+    ? peopleList.map((n,i)=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid var(--border);font-size:13px">
+          <span>${n}</span>
+          <button style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 6px;border-radius:4px"
+            onmouseover="this.style.color='var(--danger)';this.style.background='var(--danger-l)'"
+            onmouseout="this.style.color='var(--text3)';this.style.background='none'"
+            onclick="peopleRemove(${i})">✕</button>
+        </div>`).join('')
+    : '<div style="padding:12px;color:var(--text3);font-size:13px;text-align:center">尚無人員</div>';
+}
+
+function peopleAdd() {
+  const input = g('people-new-input'); if(!input) return;
+  const name = input.value.trim();
+  if(!name) return;
+  if(peopleList.includes(name)) { input.value=''; return toast('姓名已存在','err'); }
+  peopleList.push(name);
+  savePeople();
+  initPeopleDropdowns();
+  renderPeopleList();
+  input.value = '';
+  toast(`已新增「${name}」`,'ok');
+}
+
+function peopleRemove(idx) {
+  const name = peopleList[idx];
+  if(!confirm(`確定要移除「${name}」？`)) return;
+  peopleList.splice(idx, 1);
+  savePeople();
+  initPeopleDropdowns();
+  renderPeopleList();
+  toast(`已移除「${name}」`,'ok');
 }
 
 // ═══════════════════════════════════════

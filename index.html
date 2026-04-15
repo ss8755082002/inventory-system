@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <!-- v2026-04-14T15:39:28.568Z -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>庫存管理系統</title>
+<title>MK 庫存管理系統</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -201,7 +201,7 @@ label .req-star{font-size:12px}
 <!-- ══ Sidebar ══ -->
 <aside class="sidebar">
   <div class="sb-logo">
-    <div class="name">倉庫管理</div>
+    <div class="name">MK 庫存管理</div>
     <div class="ver">Inventory System v1</div>
   </div>
   <div class="nav-sec">主要功能</div>
@@ -255,7 +255,9 @@ label .req-star{font-size:12px}
         <span class="legend-item"><span class="legend-dot" style="background:var(--text3)"></span>零庫存</span>
       </div>
       <div class="filter-bar">
-        <input type="text" id="inv-q" placeholder="搜尋商品名稱、編號..." oninput="filterInv()">
+        <select id="inv-q" onchange="filterInv()" style="min-width:200px">
+          <option value="">全部商品名稱</option>
+        </select>
         <select id="inv-wh"   onchange="filterInv()"><option value="">全部倉庫</option></select>
         <select id="inv-flag" onchange="filterInv()">
           <option value="">全部狀態</option>
@@ -264,16 +266,18 @@ label .req-star{font-size:12px}
         </select>
         <button class="btn sm" onclick="toggleInvSort()" id="inv-sort-btn">項次 ↑</button>
       </div>
+      <!-- 商品名稱篩選時顯示各倉庫合計 -->
+      <div id="inv-summary" style="display:none;background:var(--accent-l);border:1px solid var(--accent-m);border-radius:var(--r);padding:10px 16px;margin-bottom:10px;font-size:13px"></div>
       <div class="tw">
         <table class="dt">
           <thead>
             <tr>
               <th>倉庫</th><th>商品名稱</th><th class="r">數量</th><th>單位</th>
-              <th class="r">項次</th><th>規格</th><th class="r">今日消耗</th>
+              <th class="r">項次</th><th>規格</th>
               <th class="r">安全庫存</th><th>狀態</th><th>庫存編號</th>
             </tr>
           </thead>
-          <tbody id="inv-body"><tr><td colspan="10" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+          <tbody id="inv-body"><tr><td colspan="9" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
         </table>
       </div>
       <div class="pgn" id="inv-pgn"></div>
@@ -492,7 +496,7 @@ label .req-star{font-size:12px}
       <div class="tw">
         <table class="dt">
           <thead>
-            <tr><th>食材名稱</th><th>進貨&amp;生產</th><th class="r">數量</th><th>建檔時間</th><th>星期</th><th>日期</th><th>建檔人員</th></tr>
+            <tr><th>食材名稱</th><th>進貨&amp;生產</th><th class="r">數量</th><th>建檔時間</th><th>星期</th><th>建檔人員</th></tr>
           </thead>
           <tbody id="pl-body"><tr><td colspan="7" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
         </table>
@@ -720,11 +724,11 @@ async function post(payload) {
 }
 
 // ═══════════════════════════════════════
-// SYNC — 靜態分頁快取於 localStorage，動態分頁並行 fetch
+// SYNC — inventory 不快取確保即時更新；bom 快取；其餘並行 fetch
 // ═══════════════════════════════════════
-const STATIC_TABS  = ['inventory','bom'];          // 幾乎不變動
-const DYNAMIC_TABS = ['purchase','consumption','stockUpdate','delivery']; // 需即時
-const CACHE_TTL    = 5 * 60 * 1000; // 靜態快取 5 分鐘
+const STATIC_TABS  = ['bom'];   // 幾乎不變動，快取 5 分鐘
+const DYNAMIC_TABS = ['inventory','purchase','consumption','stockUpdate','delivery']; // 每次都 fetch
+const CACHE_TTL    = 5 * 60 * 1000; // 5 分鐘
 
 function cacheGet(key) {
   try {
@@ -746,22 +750,21 @@ async function syncAll(forceRefresh) {
   if (!API) return;
   g('sync-info').textContent = '同步中...';
 
-  // 1. 靜態分頁：先從快取讀，若過期才重新 fetch
+  // 1. BOM 快取（幾乎不變動）
   for (const tab of STATIC_TABS) {
     const cached = forceRefresh ? null : cacheGet(tab);
     if (cached) {
-      const key = tab === 'inventory' ? 'inventory' : tab;
-      D[key] = cached;
+      D[tab] = cached;
     } else {
       const rows = await fetchTab(tab);
-      const key  = tab === 'inventory' ? 'inventory' : tab;
-      D[key] = rows;
+      D[tab] = rows;
       if (rows.length) cacheSet(tab, rows);
     }
   }
 
-  // 2. 動態分頁：並行 fetch（只有3個，不觸發 quota）
+  // 2. 所有動態分頁（含 inventory）並行 fetch，確保庫存即時
   const dynamicMap = {
+    inventory:   'inventory',
     purchase:    'purchase',
     consumption: 'consumption',
     stockUpdate: 'stockUpdate',
@@ -772,7 +775,7 @@ async function syncAll(forceRefresh) {
   );
   results.forEach(([tab, rows]) => { D[dynamicMap[tab]] = rows; });
 
-  // usageLog：background fetch（不阻塞 UI）
+  // 3. usageLog：background fetch（不阻塞 UI）
   fetchTab('usage').then(r => { D.usageLog = r; }).catch(()=>{});
 
   g('sync-info').textContent = '同步 ' + new Date().toLocaleTimeString('zh-TW');
@@ -800,6 +803,20 @@ function buildDropdowns() {
   const whs  = [...new Set(D.inventory.map(r => String(r['倉庫名稱']||'').trim()).filter(Boolean))];
 
   setOpts('inv-wh',  whs.map(w=>[w,w]), '全部倉庫');
+
+  // 庫存總覽商品名稱下拉（所有倉庫，去重排序）
+  const allInvNames = [...new Set(
+    D.inventory
+      .sort((a,b)=>(parseInt(a['項次'])||999)-(parseInt(b['項次'])||999))
+      .map(r=>r['商品名稱']).filter(Boolean)
+  )];
+  const invQ = g('inv-q');
+  if(invQ){
+    const cur = invQ.value;
+    invQ.innerHTML = '<option value="">全部商品名稱</option>' +
+      allInvNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+    if(cur) invQ.value = cur;
+  }
   // 出入庫倉庫固定使用 195、317、大野 三個代碼
   setOpts('tr-default-from', WH_CODES.map(w=>[w,w]),'— 選擇出庫倉庫 —');
   setOpts('tr-default-to',   WH_CODES.map(w=>[w,w]),'— 選擇入庫倉庫 —');
@@ -920,17 +937,38 @@ function stockStatus(row) {
 }
 
 function filterInv() {
-  const q  = gv('inv-q').toLowerCase();
+  const q  = (gv('inv-q')||'').trim();
   const wh = gv('inv-wh');
   const fl = gv('inv-flag');
   F.inventory = D.inventory.filter(r => {
-    if (q && !(`${r['商品名稱']||''} ${r['庫存編號']||''} ${r['商品編號']||''}`).toLowerCase().includes(q)) return false;
+    if (q && (r['商品名稱']||'') !== q) return false;
     if (wh  && String(r['倉庫名稱']||'').trim() !== wh)  return false;
     const st = stockStatus(r);
     if (fl === 'danger' && st !== 'danger') return false;
     if (fl === 'zero'   && st !== 'zero')   return false;
     return true;
   });
+
+  // 同名商品跨倉庫數量合計
+  const summaryEl = g('inv-summary');
+  if(q && F.inventory.length > 0){
+    const totals = {};
+    F.inventory.forEach(r=>{
+      const whn  = String(r['倉庫名稱']||'').trim() || '—';
+      const unit = r['單位']||'';
+      const key  = whn+'|'+unit;
+      if(!totals[key]) totals[key]={ wh:whn, unit, total:0 };
+      totals[key].total += parseFloat(r['數量'])||0;
+    });
+    const allQty = F.inventory.reduce((s,r)=>s+(parseFloat(r['數量'])||0),0);
+    const unit0  = F.inventory[0]['單位']||'';
+    const parts  = Object.values(totals).map(t=>`<strong>${t.wh}</strong>：${fmtQty(t.total)} ${t.unit}`).join('　');
+    summaryEl.innerHTML = `📦 <strong>${q}</strong> 各倉庫庫存　${parts}　｜　<strong>合計：${fmtQty(allQty)} ${unit0}</strong>`;
+    summaryEl.style.display='';
+  } else {
+    summaryEl.style.display='none';
+  }
+
   PG.inventory = 1; renderInv();
 }
 
@@ -950,7 +988,6 @@ function renderInv() {
     const st  = stockStatus(r);
     const qty = parseFloat(r['數量']) ?? 0;
     const safe= getSafeStock(r);
-    const con = parseFloat(r['今日消耗']) || 0;
     const rowCls = st==='danger' ? 'danger-row' : '';
     const qtyCls = st==='danger' ? 'qty-danger' : 'qty-cell';
     const stBadge= st==='danger' ? '<span class="badge danger">低庫存</span>' : st==='zero' ? '<span class="badge gray">零庫存</span>' : '';
@@ -966,12 +1003,11 @@ function renderInv() {
       <td class="dim">${r['單位']||'—'}</td>
       <td class="r mono dim">${r['項次']||i+1}</td>
       <td class="dim mono">${r['規格']||'—'}</td>
-      <td class="r dim">${con ? fmtQty(con) : '—'}</td>
       <td class="r dim">${safe ? fmtQty(safe) : '—'}</td>
       <td>${stBadge}</td>
       <td class="mono dim">${r['庫存編號']||'—'}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="10" class="empty-st">無符合條件的資料</td></tr>`;
+  }).join('') : `<tr><td colspan="9" class="empty-st">無符合條件的資料</td></tr>`;
   mkPgn('inv-pgn', rows.length, PG.inventory, n=>{PG.inventory=n;renderInv();});
 }
 
@@ -1600,10 +1636,9 @@ function renderPL() {
       <td class="r mono">${qty!==''?fmtQty(qty):'—'}</td>
       <td class="mono dim">${String(recTime).slice(0,16)}</td>
       <td class="dim">${r['星期']||'—'}</td>
-      <td class="mono">${String(r['日期']||'').slice(0,10)||'—'}</td>
       <td class="dim">${r['建檔人員']||'—'}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="7" class="empty-st">無符合條件的資料</td></tr>`;
+  }).join('') : `<tr><td colspan="6" class="empty-st">無符合條件的資料</td></tr>`;
   mkPgn('pl-pgn',rows.length,PG.purchase,n=>{PG.purchase=n;renderPL();});
 }
 

@@ -323,6 +323,8 @@ label .req-star{font-size:12px}
       <button class="btn sm" id="inv-edit-btn" onclick="toggleInvEdit()" style="display:none">✎ 編輯</button>
       <button class="btn sm green" id="inv-save-btn" onclick="saveInvEdits()" style="display:none">✓ 儲存</button>
       <button class="btn sm" id="inv-cancel-btn" onclick="cancelInvEdit()" style="display:none">取消</button>
+      <button class="btn sm" id="tr-sort-topbtn" onclick="startTrSort()" style="display:none">⇅ 調整順序</button>
+      <button class="btn sm" id="us-sort-topbtn" onclick="startUsSort()" style="display:none">⇅ 調整順序</button>
     </div>
   </div>
 
@@ -431,7 +433,7 @@ label .req-star{font-size:12px}
       <button class="add-row-btn" onclick="addRcRow()">＋ 新增一行</button>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
         <button class="btn" onclick="clearRcRows()">清空</button>
-        <button class="btn green" onclick="submitReceive()">✓ 確認送出</button>
+        <button class="btn green" id="rc-submit-btn" onclick="submitReceive()">✓ 確認送出</button>
       </div>
       <div class="ferr" id="rc-err"></div>
     </div>
@@ -441,6 +443,13 @@ label .req-star{font-size:12px}
     <!-- ══════════════ 倉庫配送（批次填寫固定清單） ══════════════ -->
     <div class="page" id="page-transfer">
       <div class="istrip blue"><strong>倉庫配送</strong>　固定清單預填，只需填寫「配送數量」，數量為 0 的不送出。特殊品項可在下方調整倉庫。</div>
+      <!-- 排序編輯列 -->
+      <div id="tr-sort-bar" style="display:none;background:var(--purple-l);border:1px solid #c0b0e0;border-radius:var(--r);padding:10px 14px;margin-bottom:10px;font-size:13px;display:none">
+        <span style="font-weight:600;color:var(--purple)">✦ 排序模式</span>
+        <span style="color:var(--text2);margin-left:8px;font-size:12px">拖曳列左側 ⠿ 可調整順序，完成後按「儲存順序」</span>
+        <button class="btn sm green" style="margin-left:12px" onclick="saveTrOrder()">✓ 儲存順序</button>
+        <button class="btn sm" style="margin-left:6px" onclick="cancelTrSort()">取消</button>
+      </div>
       <div class="form-hdr-grid">
         <div class="fhg-item"><label>時間</label>
           <select class="fi" id="tr-time"><option>上午</option><option selected>下午</option></select>
@@ -510,6 +519,13 @@ label .req-star{font-size:12px}
     <!-- ══════════════ 每日食材使用（批次固定清單） ══════════════ -->
     <div class="page" id="page-usage">
       <div class="istrip green"><strong>每日食材使用</strong>　填入「今日庫存」數量，消耗量會自動計算（昨日庫存 − 今日庫存）。</div>
+      <!-- 排序編輯列 -->
+      <div id="us-sort-bar" style="display:none;background:var(--purple-l);border:1px solid #c0b0e0;border-radius:var(--r);padding:10px 14px;margin-bottom:10px">
+        <span style="font-weight:600;color:var(--purple)">✦ 排序模式</span>
+        <span style="color:var(--text2);margin-left:8px;font-size:12px">拖曳列左側 ⠿ 可調整順序，完成後按「儲存順序」</span>
+        <button class="btn sm green" style="margin-left:12px" onclick="saveUsOrder()">✓ 儲存順序</button>
+        <button class="btn sm" style="margin-left:6px" onclick="cancelUsSort()">取消</button>
+      </div>
       <div class="form-hdr-grid">
         <div class="fhg-item"><label>標題（Day編號）</label><input class="fi" id="us-title" placeholder="例：day41"></div>
         <div class="fhg-item"><label>日期</label><input class="fi" id="us-date" type="date"></div>
@@ -583,6 +599,7 @@ label .req-star{font-size:12px}
         </select>
         <input type="date" id="pl-df" onchange="filterPL()">
         <input type="date" id="pl-dt" onchange="filterPL()">
+        <button class="btn sm" onclick="openRevertModal('purchase')" style="margin-left:auto">↩ 庫存復原</button>
       </div>
       <div class="tw">
         <table class="dt">
@@ -601,6 +618,7 @@ label .req-star{font-size:12px}
         <input type="text" id="dl-q" placeholder="搜尋配送人員、倉庫..." oninput="filterDL()">
         <input type="date" id="dl-df" onchange="filterDL()">
         <input type="date" id="dl-dt" onchange="filterDL()">
+        <button class="btn sm" onclick="openRevertModal('delivery')" style="margin-left:auto">↩ 庫存復原</button>
       </div>
       <div class="tw">
         <table class="dt">
@@ -624,6 +642,7 @@ label .req-star{font-size:12px}
         </select>
         <input type="date" id="co-df" onchange="filterCo()">
         <input type="date" id="co-dt" onchange="filterCo()">
+        <button class="btn sm" onclick="openRevertModal('consumption')" style="margin-left:auto">↩ 庫存復原</button>
       </div>
       <!-- 商品名稱篩選時顯示統計 -->
       <div id="co-summary" style="display:none;background:var(--accent-l);border:1px solid var(--accent-m);border-radius:var(--r);padding:10px 16px;margin-bottom:10px;font-size:13px"></div>
@@ -789,11 +808,16 @@ function nav(name) {
   const [t, m] = PAGE_META[name] || [name,''];
   g('pg-title').textContent = t;
   g('pg-meta').textContent  = m;
-  // Show/hide inventory edit buttons
+  // 庫存總覽編輯按鈕
   const isInv = name === 'inventory';
   g('inv-edit-btn').style.display = (isInv && !invEditMode) ? '' : 'none';
   g('inv-save-btn').style.display = (isInv && invEditMode) ? '' : 'none';
   g('inv-cancel-btn').style.display = (isInv && invEditMode) ? '' : 'none';
+  // 配送/每日食材 排序按鈕
+  const trBtn = g('tr-sort-topbtn');
+  const usBtn = g('us-sort-topbtn');
+  if(trBtn) trBtn.style.display = name==='transfer' ? '' : 'none';
+  if(usBtn) usBtn.style.display = name==='usage'    ? '' : 'none';
   // Sync mobile tab bar
   document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('on'));
   document.querySelectorAll('.tab-more-item').forEach(t => t.classList.remove('on'));
@@ -802,7 +826,6 @@ function nav(name) {
   if(tabEl) tabEl.classList.add('on');
   if(moreEl){ moreEl.classList.add('on'); g('tab-more-btn')?.classList.add('on'); }
   else { g('tab-more-btn')?.classList.remove('on'); }
-  // Close sidebar on mobile/tablet after navigation
   if(window.innerWidth < 1024) closeSidebar();
 }
 
@@ -1357,9 +1380,10 @@ async function submitReceiveAndBom() {
 
   const hasBom = materials.length > 0;
 
-  const btn = g('bom-submit-btn');
-  const mainBtn = document.querySelector('#page-receive .btn.green');
-  [btn, mainBtn].forEach(b=>{ if(b){ b.classList.add('loading'); b.textContent='送出中...'; }});
+  const bomBtn  = g('bom-submit-btn');
+  const mainBtn = g('rc-submit-btn');
+  const allBtns = [bomBtn, mainBtn].filter(Boolean);
+  allBtns.forEach(b=>{ b.classList.add('loading'); b.textContent='送出中...'; });
 
   try {
     const recTime = twTime();
@@ -1394,7 +1418,10 @@ async function submitReceiveAndBom() {
     clearRcRows(); closeBomExpand(); syncAll();
   } catch(e) { showErr(err, e.message); }
   finally {
-    [btn, mainBtn].forEach(b=>{ if(b){ b.classList.remove('loading'); b.innerHTML = b===mainBtn ? '✓ 確認送出' : '✓ 送出進貨 ＋ 扣 BOM 用料'; }});
+    const bomBtn2  = g('bom-submit-btn');
+    const mainBtn2 = g('rc-submit-btn');
+    if(bomBtn2)  { bomBtn2.classList.remove('loading');  bomBtn2.innerHTML  = '✓ 送出進貨 ＋ 扣 BOM 用料'; }
+    if(mainBtn2) { mainBtn2.classList.remove('loading'); mainBtn2.innerHTML = '✓ 確認送出'; }
   }
 }
 
@@ -2188,6 +2215,345 @@ function toast(msg,type=''){
   const el=g('toast');el.textContent=msg;
   el.className='show'+(type?' '+type:'');
   clearTimeout(toastTmr);toastTmr=setTimeout(()=>el.className='',3200);
+}
+
+// ═══════════════════════════════════════
+// 排序模式（配送 / 每日食材）
+// 用 localStorage 儲存自訂項次，重建清單時優先採用
+// ═══════════════════════════════════════
+const TR_ORDER_KEY = 'inv_tr_order';
+const US_ORDER_KEY = 'inv_us_order';
+
+function getCustomOrder(key) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){ return null; }
+}
+function setCustomOrder(key, arr) {
+  try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e){}
+}
+
+// ── 配送排序 ──────────────────────────────
+let trSortMode = false;
+
+function startTrSort() {
+  trSortMode = true;
+  g('tr-sort-bar').style.display = 'block';
+  g('tr-sort-topbtn').style.display = 'none';
+  rebuildTransferList(); // 重建含拖曳控點的版本
+}
+function cancelTrSort() {
+  trSortMode = false;
+  g('tr-sort-bar').style.display = 'none';
+  g('tr-sort-topbtn').style.display = '';
+  rebuildTransferList();
+}
+function saveTrOrder() {
+  const rows = [...document.querySelectorAll('#tr-body tr[id^="trr-"]')];
+  const order = rows.map(r => r.id.replace('trr-',''));
+  setCustomOrder(TR_ORDER_KEY, order);
+  trSortMode = false;
+  g('tr-sort-bar').style.display = 'none';
+  g('tr-sort-topbtn').style.display = '';
+  rebuildTransferList();
+  toast('配送清單順序已儲存', 'ok');
+}
+
+// ── 每日食材排序 ───────────────────────────
+let usSortMode = false;
+
+function startUsSort() {
+  usSortMode = true;
+  g('us-sort-bar').style.display = 'block';
+  g('us-sort-topbtn').style.display = 'none';
+  rebuildUsageList(); // 重建含拖曳控點的版本
+}
+function cancelUsSort() {
+  usSortMode = false;
+  g('us-sort-bar').style.display = 'none';
+  g('us-sort-topbtn').style.display = '';
+  rebuildUsageList();
+}
+function saveUsOrder() {
+  const rows = [...document.querySelectorAll('#us-body tr[id^="usr-"]')];
+  const order = rows.map(r => r.id.replace('usr-',''));
+  setCustomOrder(US_ORDER_KEY, order);
+  usSortMode = false;
+  g('us-sort-bar').style.display = 'none';
+  g('us-sort-topbtn').style.display = '';
+  rebuildUsageList();
+  toast('食材清單順序已儲存', 'ok');
+}
+
+// ── 拖曳排序核心 ──────────────────────────
+// 輕量原生拖曳，不依賴外部套件
+let dragSrc = null;
+
+function initDragSort(tbody) {
+  tbody.addEventListener('dragstart', e => {
+    dragSrc = e.target.closest('tr');
+    if(dragSrc) { dragSrc.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; }
+  });
+  tbody.addEventListener('dragend', e => {
+    const tr = e.target.closest('tr');
+    if(tr) tr.style.opacity = '';
+    tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+  });
+  tbody.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const target = e.target.closest('tr');
+    if(target && target !== dragSrc) {
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+      target.classList.add('drag-over');
+    }
+  });
+  tbody.addEventListener('drop', e => {
+    e.preventDefault();
+    const target = e.target.closest('tr');
+    if(target && dragSrc && target !== dragSrc) {
+      const rows = [...tbody.querySelectorAll('tr')];
+      const fromIdx = rows.indexOf(dragSrc);
+      const toIdx   = rows.indexOf(target);
+      if(fromIdx < toIdx) target.after(dragSrc);
+      else target.before(dragSrc);
+    }
+    tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+  });
+  // Touch support (simple swap on tap)
+  let touchSrc = null;
+  tbody.addEventListener('touchstart', e => {
+    touchSrc = e.target.closest('tr[draggable]');
+    if(touchSrc) touchSrc.style.background = 'var(--purple-l)';
+  }, {passive:true});
+  tbody.addEventListener('touchend', e => {
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = el?.closest('tr[draggable]');
+    if(touchSrc && target && touchSrc !== target) {
+      const rows = [...tbody.querySelectorAll('tr[draggable]')];
+      const fi = rows.indexOf(touchSrc), ti = rows.indexOf(target);
+      if(fi < ti) target.after(touchSrc); else target.before(touchSrc);
+    }
+    if(touchSrc) touchSrc.style.background = '';
+    touchSrc = null;
+  }, {passive:true});
+}
+
+// ── 把拖曳控點 CSS 加進去 ─────────────────
+(function(){
+  const s = document.createElement('style');
+  s.textContent = `
+    tr.drag-over td { background: var(--accent-l) !important; }
+    td.drag-handle { cursor: grab; color: var(--text3); font-size: 16px; text-align: center; user-select: none; padding: 0 6px; }
+    td.drag-handle:active { cursor: grabbing; }
+  `;
+  document.head.appendChild(s);
+})();
+
+// ── 修改 rebuildTransferList 在排序模式加控點 ──
+// (patch：在 rebuildTransferList 執行後，若 trSortMode 則加入控點)
+const _origRebuildTransferList = rebuildTransferList;
+rebuildTransferList = function() {
+  // 先取得自訂順序
+  const customOrder = getCustomOrder(TR_ORDER_KEY);
+  const origFn = _origRebuildTransferList;
+  origFn();
+  // 若有自訂順序且非排序模式，重新排列 DOM 行
+  if(customOrder && !trSortMode) {
+    const tbody = document.querySelector('#tr-body');
+    if(!tbody) return;
+    customOrder.forEach(invId => {
+      const row = document.getElementById('trr-' + invId);
+      if(row) tbody.appendChild(row);
+    });
+  }
+  // 排序模式：加拖曳控點
+  if(trSortMode) {
+    const tbody = document.querySelector('#tr-body');
+    if(!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      tr.setAttribute('draggable','true');
+      const handle = document.createElement('td');
+      handle.className = 'drag-handle';
+      handle.innerHTML = '⠿';
+      handle.title = '拖曳調整順序';
+      tr.insertBefore(handle, tr.firstChild);
+    });
+    initDragSort(tbody);
+  }
+};
+
+// ── 修改 rebuildUsageList 在排序模式加控點 ──
+const _origRebuildUsageList = rebuildUsageList;
+rebuildUsageList = function() {
+  const customOrder = getCustomOrder(US_ORDER_KEY);
+  const origFn = _origRebuildUsageList;
+  origFn();
+  if(customOrder && !usSortMode) {
+    const tbody = document.querySelector('#us-body');
+    if(!tbody) return;
+    customOrder.forEach(invId => {
+      const row = document.getElementById('usr-' + invId);
+      if(row) tbody.appendChild(row);
+    });
+  }
+  if(usSortMode) {
+    const tbody = document.querySelector('#us-body');
+    if(!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      tr.setAttribute('draggable','true');
+      const handle = document.createElement('td');
+      handle.className = 'drag-handle';
+      handle.innerHTML = '⠿';
+      handle.title = '拖曳調整順序';
+      tr.insertBefore(handle, tr.firstChild);
+    });
+    initDragSort(tbody);
+  }
+};
+
+// ═══════════════════════════════════════
+// 庫存復原 Modal
+// 功能：輸入庫存編號 + 調整數量（正負）→ 呼叫 updateInventory
+// 復原紀錄會寫入物料更新紀錄（來源標示「手動復原」）
+// ═══════════════════════════════════════
+function openRevertModal(sourceTab) {
+  // 建立 modal（若尚未存在）
+  let modal = g('revert-modal');
+  if(!modal) {
+    modal = document.createElement('div');
+    modal.id = 'revert-modal';
+    modal.className = 'modal-bg';
+    modal.innerHTML = `
+      <div class="modal" style="width:480px">
+        <div class="modal-hdr">
+          <h2>↩ 庫存復原調整</h2>
+          <button class="modal-x" onclick="closeRevertModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="istrip blue" style="margin-bottom:14px;font-size:12px">
+            填錯的品項請在下方選擇商品，輸入<strong>正確數量</strong>直接覆蓋，或輸入<strong>增減量</strong>（正數加、負數減）。
+            復原紀錄會寫入物料更新紀錄。
+          </div>
+          <div id="revert-rows"></div>
+          <button class="add-row-btn" onclick="addRevertRow()" style="margin-top:8px">＋ 新增品項</button>
+          <div class="ferr" id="revert-err" style="margin-top:8px"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" onclick="closeRevertModal()">取消</button>
+          <button class="btn green" id="revert-submit-btn" onclick="submitRevert()">✓ 執行復原</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  revertRows = [];
+  addRevertRow();
+  modal.classList.add('open');
+}
+
+function closeRevertModal() {
+  g('revert-modal')?.classList.remove('open');
+}
+
+let revertRows = [];
+
+function addRevertRow() {
+  const id = Date.now() + revertRows.length;
+  revertRows.push({ id, invId:'', mode:'set' });
+  renderRevertRows();
+}
+
+function renderRevertRows() {
+  const allItems = D.inventory
+    .sort((a,b)=>(parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
+  const invOpts = allItems.map(r =>
+    `<option value="${r['庫存編號']}">${r['商品名稱']||''} ／ ${r['倉庫名稱']||''} (${r['庫存編號']||''})</option>`
+  ).join('');
+
+  const el = g('revert-rows');
+  if(!el) return;
+  el.innerHTML = revertRows.map((r,i) => {
+    const item = D.inventory.find(x=>x['庫存編號']===r.invId);
+    const curQty = item ? `目前：${fmtQty(parseFloat(item['數量'])||0)} ${item['單位']||''}` : '';
+    return `<div style="display:grid;grid-template-columns:2fr 1fr 1.2fr auto;gap:8px;align-items:center;margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:var(--r)">
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">商品 ${i+1} <span style="font-weight:400;color:var(--text3)">${curQty}</span></label>
+        <select style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:var(--sans)"
+          onchange="updRevertRow(${r.id},'invId',this.value)">
+          <option value="">— 選擇商品 —</option>${invOpts}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">模式</label>
+        <select style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:var(--sans)"
+          onchange="updRevertRow(${r.id},'mode',this.value)">
+          <option value="set" ${r.mode==='set'?'selected':''}>直接設定</option>
+          <option value="delta" ${r.mode==='delta'?'selected':''}>增減調整</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">${r.mode==='set'?'正確數量':'增減量（±）'}</label>
+        <input type="number" step="0.01" placeholder="${r.mode==='set'?'輸入數量':'+10 或 -5'}"
+          style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px"
+          oninput="updRevertRow(${r.id},'qty',this.value)">
+      </div>
+      <button class="del-btn" onclick="delRevertRow(${r.id})" style="margin-top:18px">✕</button>
+    </div>`;
+  }).join('');
+
+  // restore select values
+  revertRows.forEach(r => {
+    const rows = el.querySelectorAll('div[style*="grid"]');
+    const row  = rows[revertRows.indexOf(r)];
+    if(!row || !r.invId) return;
+    const sel = row.querySelector('select');
+    if(sel) sel.value = r.invId;
+  });
+}
+
+function updRevertRow(id, key, val) {
+  const r = revertRows.find(x=>x.id===id);
+  if(!r) return;
+  r[key] = val;
+  if(key === 'invId' || key === 'mode') renderRevertRows();
+}
+function delRevertRow(id) {
+  revertRows = revertRows.filter(x=>x.id!==id);
+  renderRevertRows();
+}
+
+async function submitRevert() {
+  const errEl = g('revert-err');
+  errEl.style.display = 'none';
+
+  const valid = revertRows.filter(r => r.invId && r.qty !== '' && r.qty !== undefined);
+  if(!valid.length) {
+    errEl.textContent = '請至少填寫一筆商品和數量';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = g('revert-submit-btn');
+  if(btn){ btn.classList.add('loading'); btn.textContent='執行中...'; }
+
+  try {
+    const items = valid.map(r => {
+      const item = D.inventory.find(x=>x['庫存編號']===r.invId);
+      const curQty = parseFloat(item?.['數量']||0);
+      const inputQty = parseFloat(r.qty);
+      const finalQty = r.mode === 'delta' ? curQty + inputQty : inputQty;
+      return { '庫存編號': r.invId, '今日庫存': finalQty };
+    });
+
+    const res = await post({ action:'updateInventory', data:{ items }, source:'手動復原' });
+    toast(`庫存復原完成（${res.updated||items.length} 項已更新）`, 'ok');
+    closeRevertModal();
+    syncAll();
+  } catch(e) {
+    errEl.textContent = '復原失敗：' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    if(btn){ btn.classList.remove('loading'); btn.innerHTML='✓ 執行復原'; }
+  }
 }
 </script>
 </body>

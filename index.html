@@ -401,7 +401,7 @@ label .req-star{font-size:12px}
               <th class="idx">#</th>
               <th style="min-width:80px">類型</th>
               <th style="min-width:200px">食材名稱 *</th>
-              <th style="min-width:85px">商品編號</th>
+              <th style="min-width:85px">庫存編號</th>
               <th style="min-width:75px;text-align:right">數量 *</th>
               <th style="min-width:65px">單位</th>
               <th style="min-width:85px">規格</th>
@@ -510,7 +510,7 @@ label .req-star{font-size:12px}
         <span style="font-size:12px;color:var(--text3)">＊ 數量填 0 或空白的品項不送出</span>
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="clearTransferQty()">清空數量</button>
-          <button class="btn green" onclick="submitTransfer()">✓ 確認送出配送單</button>
+          <button class="btn green" id="tr-submit-btn" onclick="submitTransfer()">✓ 確認送出配送單</button>
         </div>
       </div>
       <div class="ferr" id="tr-err"></div>
@@ -582,7 +582,7 @@ label .req-star{font-size:12px}
         <span style="font-size:12px;color:var(--text3)">＊ 使用數量為 0 或空白的品項不送出</span>
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="clearUsageQty()">清空數量</button>
-          <button class="btn green" onclick="submitUsage()">✓ 確認送出使用記錄</button>
+          <button class="btn green" id="us-submit-btn" onclick="submitUsage()">✓ 確認送出使用記錄</button>
         </div>
       </div>
       <div class="ferr" id="us-err"></div>
@@ -591,7 +591,9 @@ label .req-star{font-size:12px}
     <!-- ══════════════ 進貨紀錄 ══════════════ -->
     <div class="page" id="page-purchase-log">
       <div class="filter-bar">
-        <input type="text" id="pl-q" placeholder="搜尋食材名稱..." oninput="filterPL()">
+        <select id="pl-q" onchange="filterPL()" style="min-width:200px">
+          <option value="">全部食材名稱</option>
+        </select>
         <select id="pl-type" onchange="filterPL()">
           <option value="">進貨 &amp; 生產</option>
           <option value="進貨">進貨</option>
@@ -984,6 +986,10 @@ async function syncAll(forceRefresh) {
     D.consumption = consRows;
     F.purchase    = [...purchRows];
     F.consumption = [...consRows];
+    // 更新進貨紀錄食材名稱下拉選單
+    const plNames = [...new Set(purchRows.map(r=>r['食材名稱']).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+    const plQ = g('pl-q');
+    if(plQ){ const cur=plQ.value; plQ.innerHTML='<option value="">全部食材名稱</option>'+plNames.map(n=>`<option value="${n}">${n}</option>`).join(''); if(cur) plQ.value=cur; }
     renderPL(); renderCo();
 
     // 第二批：stockUpdate + delivery（次要）
@@ -1069,6 +1075,18 @@ function buildDropdowns() {
     coQ.innerHTML = '<option value="">全部商品名稱</option>' +
       uniqueNames.map(n=>`<option value="${n}">${n}</option>`).join('');
     if(cur) coQ.value = cur;
+  }
+
+  // 進貨/生產紀錄食材名稱下拉
+  const plNames = [...new Set(
+    D.purchase.map(r => r['食材名稱']).filter(Boolean)
+  )].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+  const plQ = g('pl-q');
+  if(plQ) {
+    const cur = plQ.value;
+    plQ.innerHTML = '<option value="">全部食材名稱</option>' +
+      plNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+    if(cur) plQ.value = cur;
   }
 
   // 每日食材使用預設倉庫 195（只在第一次未選時自動選）
@@ -1264,7 +1282,7 @@ function getRcFilteredItems() {
 
 function renderRcRows() {
   const items  = getRcFilteredItems().sort((a,b)=>(parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
-  const nameOpts = items.map(r=>`<option value="${r['庫存編號']}">${r['商品名稱']||''} (${r['庫存編號']||''})</option>`).join('');
+  const nameOpts = items.map(r=>`<option value="${r['庫存編號']}">${r['商品名稱']||''}</option>`).join('');
   const bomIds = [...new Map(D.bom.map(r=>[r['BOM編號'],r])).values()];
   // BOM成品名稱：依序嘗試可能的欄位名稱
   const getBomLabel = r => {
@@ -1290,7 +1308,7 @@ function renderRcRows() {
           <option value="">— 選擇食材 —</option>${nameOpts}
         </select>
       </td>
-      <td><input value="${r.code}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
+      <td><input value="${r.invId}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
       <td><input type="number" value="${r.qty}" min="0" step="0.01" style="text-align:right;font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%" oninput="updateRcRow(${r.id},'qty',this.value)" placeholder="0"></td>
       <td><input value="${r.unit}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
       <td><input value="${r.spec}" readonly placeholder="自動帶入" style="background:var(--surface2);font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;width:100%"></td>
@@ -1603,7 +1621,7 @@ async function submitTransfer() {
   const extraValid = trExtraRows.filter(r=>r.name.trim()&&parseFloat(r.qty)>0);
   if(!fixedRows.length && !extraValid.length) return showErr(err,'請至少填寫一筆配送數量');
   err.style.display='none';
-  const btn = document.querySelector('#page-transfer .btn.green');
+  const btn = g('tr-submit-btn');
   if(btn){ btn.classList.add('loading'); btn.textContent='送出中...'; }
   const recTime = twTime();
   const base = { '時間':time, '建檔時間':recTime, '日期':date, '星期':gv('tr-day'), '製單人員':user, '配送人員':driver };
@@ -1774,7 +1792,7 @@ async function submitUsage() {
 
   if(!fixedInputs.length && !extraValid.length) return showErr(err,'請至少填寫一筆今日庫存數量');
   err.style.display='none';
-  const btn = document.querySelector('#page-usage .btn.green');
+  const btn = g('us-submit-btn');
   if(btn){ btn.classList.add('loading'); btn.textContent='送出中...'; }
   const recTime = twTime();
   const baseData = { '標題':title, '日期':date, '星期':day, '建檔人員':user, '特別備註':note, '倉庫名稱':wh, '建檔時間':recTime };
@@ -1832,12 +1850,12 @@ async function submitUsage() {
 // PURCHASE LOG
 // ═══════════════════════════════════════
 function filterPL() {
-  const q  = gv('pl-q').toLowerCase();
+  const q  = gv('pl-q');
   const tp = gv('pl-type');
   const df = gv('pl-df');
   const dt = gv('pl-dt');
   F.purchase = D.purchase.filter(r=>{
-    if(q && !(r['食材名稱']||'').toLowerCase().includes(q)) return false;
+    if(q && (r['食材名稱']||'') !== q) return false;
     const type = r['進貨&生産']||r['進貨&生產']||'';
     if(tp && type!==tp) return false;
     const d = String(r['日期']||'').slice(0,10);

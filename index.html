@@ -277,6 +277,41 @@ label .req-star{font-size:12px}
 
   /* istrip 簡化 */
   .istrip{font-size:12px;padding:10px 12px}
+
+  /* ══ 進貨/生產 header：日期+星期+建檔人員 同一行 ══ */
+  #page-receive .form-hdr-grid{grid-template-columns:1fr 44px 1fr;gap:6px}
+
+  /* ══ 進貨/生產 batch table → 雙行卡片布局，消除左右滑動 ══ */
+  #rc-table thead{display:none}
+  #rc-table,#rc-table tbody{display:block}
+  #rc-table tbody tr{
+    display:grid;
+    grid-template-columns:22px 68px 1fr 72px 62px 36px;
+    grid-template-rows:auto auto;
+    grid-template-areas:
+      "idx  type  name  invid  qty  del"
+      ".    unit  spec  bom    bom  bom";
+    column-gap:5px;row-gap:6px;
+    padding:10px 6px;
+    border-bottom:2px solid var(--border2);
+    background:var(--surface);
+  }
+  #rc-table tbody tr[style*="purple"]{background:var(--purple-l)}
+  #rc-table td{display:block!important;border:none!important;padding:0!important}
+  #rc-table td:nth-child(1){grid-area:idx;align-self:center;text-align:center;font-size:11px;color:var(--text3)}
+  #rc-table td:nth-child(2){grid-area:type}
+  #rc-table td:nth-child(3){grid-area:name}
+  #rc-table td:nth-child(4){grid-area:invid}
+  #rc-table td:nth-child(5){grid-area:qty}
+  #rc-table td:nth-child(6){grid-area:unit}
+  #rc-table td:nth-child(7){grid-area:spec}
+  #rc-table td:nth-child(8){grid-area:bom}
+  #rc-table td:nth-child(9){grid-area:del;align-self:center;justify-self:center}
+  #rc-table input,#rc-table select{min-height:44px!important;font-size:14px!important;padding:6px 8px!important}
+  #rc-table .del-btn{min-height:44px!important;min-width:36px!important}
+
+  /* ══ 倉庫配送 & 每日食材：最小寬度 = 螢幕寬，不得更小 ══ */
+  #tr-table,#us-table{min-width:100%}
 }
 </style>
 </head>
@@ -729,7 +764,8 @@ label .req-star{font-size:12px}
 // ═══════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════
-let API = localStorage.getItem('inv_api') || '';
+const HARDCODED_API = 'https://script.google.com/macros/s/AKfycbwQc-LI2oaxZGG7X9FX1A69CI52DbXQBPhNe40v29m99nyXKNIrwW1EfGT60CGicu-_hQ/exec';
+let API = HARDCODED_API || localStorage.getItem('inv_api') || '';
 const PS = 100;
 const DAYS = ['日','一','二','三','四','五','六'];
 // 倉庫代碼清單（固定三個）
@@ -1421,6 +1457,8 @@ async function submitReceiveAndBom() {
   if(!date)         return showErr(err,'請填寫日期');
   if(!user)         return showErr(err,'請選擇建檔人員（必填）');
   if(!valid.length) return showErr(err,'請至少填寫一筆有食材名稱和數量的記錄');
+  const missingBom = valid.filter(r=>r.type==='生產'&&!r.bom.trim());
+  if(missingBom.length) return showErr(err,`生產類型必須選擇 BOM 編號（${missingBom.length} 筆未填）`);
   err.style.display='none';
 
   // 收集 BOM 用料（允許負數，方便 debug）

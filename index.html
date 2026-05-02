@@ -1508,7 +1508,12 @@ function rebuildTransferList() {
       const name = String(r['倉庫名稱']||'').trim();
       return code === from || name === from || name.includes(from) || code.includes(from);
     })
-    .sort((a,b)=> (parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
+    .sort((a,b)=> {
+      const ao = parseInt(a['配送項次'])||0, bo = parseInt(b['配送項次'])||0;
+      if(ao && bo) return ao - bo;
+      if(ao) return -1; if(bo) return 1;
+      return (parseInt(a['項次'])||999) - (parseInt(b['項次'])||999);
+    });
 
   if(!items.length){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }
 
@@ -1655,7 +1660,12 @@ function rebuildUsageList() {
 
   const items = D.inventory
     .filter(r => String(r['倉庫名稱']||'').trim()==wh.trim())
-    .sort((a,b)=> (parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
+    .sort((a,b)=> {
+      const ao = parseInt(a['食材項次'])||0, bo = parseInt(b['食材項次'])||0;
+      if(ao && bo) return ao - bo;
+      if(ao) return -1; if(bo) return 1;
+      return (parseInt(a['項次'])||999) - (parseInt(b['項次'])||999);
+    });
 
   if(!items.length){ g('us-body').innerHTML=`<tr><td colspan="8" class="empty-st">該倉庫無庫存品項</td></tr>`; return; }
 
@@ -1796,52 +1806,47 @@ async function submitUsage() {
   if(btn){ btn.classList.add('loading'); btn.textContent='送出中...'; }
   const recTime = twTime();
   const baseData = { '標題':title, '日期':date, '星期':day, '建檔人員':user, '特別備註':note, '倉庫名稱':wh, '建檔時間':recTime };
-  let count = 0;
   try {
-    for(const input of fixedInputs){
+    // 合併固定清單列
+    const fixedRows = fixedInputs.map(input => {
       const yest = parseFloat(input.dataset.yest)||0;
       const todayQty = parseFloat(input.value);
-      const cons = yest - todayQty;
-      await post({ action:'append', tab:'usage', data:{
-        ...baseData,
-        '商品名稱': input.dataset.name,
-        '庫存編號': input.dataset.id,
-        '商品編號': input.dataset.code,
-        '昨日庫存': yest,
-        '今日庫存': todayQty,
-        '消耗數量': cons,
-        '單位': input.dataset.unit,
-        '規格': input.dataset.spec,
-      }});
-      count++;
-    }
-    for(const r of extraValid){
-      await post({ action:'append', tab:'usage', data:{
-        ...baseData,
-        '商品名稱': r.name.trim(),
-        '庫存編號': '',
-        '商品編號': r.code,
-        '消耗數量': parseFloat(r.qty),
-        '單位': r.unit,
-        '規格': r.spec,
-      }});
-      count++;
-    }
-    // 送出消耗記錄後，同步更新庫存總覽並寫入物料更新紀錄
+      return { ...baseData,
+        '商品名稱': input.dataset.name, '庫存編號': input.dataset.id,
+        '商品編號': input.dataset.code, '昨日庫存': yest,
+        '今日庫存': todayQty, '消耗數量': yest - todayQty,
+        '單位': input.dataset.unit, '規格': input.dataset.spec,
+      };
+    });
+    // 合併臨時品項列
+    const extraRows = extraValid.map(r => ({ ...baseData,
+      '商品名稱': r.name.trim(), '庫存編號': '', '商品編號': r.code,
+      '消耗數量': parseFloat(r.qty), '單位': r.unit, '規格': r.spec,
+    }));
+    const allRows = [...fixedRows, ...extraRows];
+
+    // 一次 POST 寫入全部消耗紀錄（原本 N 次 → 1 次）
+    await post({ action:'batchAppend', tab:'usage', data:{ rows: allRows } });
+
+    // 一次 POST 更新全部庫存數量
     if(fixedInputs.length > 0) {
-      await post({
-        action: 'updateInventory',
-        data: {
-          items: fixedInputs.map(input => ({
-            '庫存編號': input.dataset.id,
-            '今日庫存': parseFloat(input.value),
-          }))
-        }
+      await post({ action:'updateInventory', data:{
+        items: fixedInputs.map(input => ({
+          '庫存編號': input.dataset.id,
+          '今日庫存': parseFloat(input.value),
+        }))
+      }});
+      // 本地同步更新 D.inventory，不重發 syncAll()
+      fixedInputs.forEach(input => {
+        const inv = D.inventory.find(r => r['庫存編號'] === input.dataset.id);
+        if(inv) inv['數量'] = parseFloat(input.value);
       });
+      F.inventory = [...D.inventory];
+      renderInv();
     }
-    toast(`使用記錄送出成功（${count} 筆）`,'ok');
+
+    toast(`使用記錄送出成功（${allRows.length} 筆）`,'ok');
     clearUsageQty();
-    syncAll();
   } catch(e) { showErr(err, e.message); }
   finally { if(btn){ btn.classList.remove('loading'); btn.innerHTML='✓ 確認送出使用記錄'; } }
 }
@@ -2302,15 +2307,27 @@ function cancelTrSort() {
   g('tr-sort-topbtn').style.display = '';
   rebuildTransferList();
 }
-function saveTrOrder() {
-  const rows = [...document.querySelectorAll('#tr-body tr[id^="trr-"]')];
-  const order = rows.map(r => r.id.replace('trr-',''));
-  setCustomOrder(TR_ORDER_KEY, order);
-  trSortMode = false;
-  g('tr-sort-bar').style.display = 'none';
-  g('tr-sort-topbtn').style.display = '';
-  rebuildTransferList();
-  toast('配送清單順序已儲存', 'ok');
+async function saveTrOrder() {
+  const saveBtn = document.querySelector('#tr-sort-bar .btn.green');
+  if(saveBtn){ saveBtn.classList.add('loading'); saveBtn.textContent='儲存中...'; }
+  try {
+    const rows = [...document.querySelectorAll('#tr-body tr[id^="trr-"]')];
+    const items = rows.map((r,i) => ({ '庫存編號': r.id.replace('trr-',''), order: i+1 }));
+    await post({ action:'saveOrder', data:{ orderType:'tr', items } });
+    items.forEach(item => {
+      const inv = D.inventory.find(r => r['庫存編號'] === item['庫存編號']);
+      if(inv) inv['配送項次'] = item.order;
+    });
+    trSortMode = false;
+    g('tr-sort-bar').style.display = 'none';
+    g('tr-sort-topbtn').style.display = '';
+    rebuildTransferList();
+    toast('配送清單順序已儲存（雲端同步）', 'ok');
+  } catch(e) {
+    toast('儲存失敗：' + e.message, 'err');
+  } finally {
+    if(saveBtn){ saveBtn.classList.remove('loading'); saveBtn.textContent='✓ 儲存順序'; }
+  }
 }
 
 // ── 每日食材排序 ───────────────────────────
@@ -2328,15 +2345,27 @@ function cancelUsSort() {
   g('us-sort-topbtn').style.display = '';
   rebuildUsageList();
 }
-function saveUsOrder() {
-  const rows = [...document.querySelectorAll('#us-body tr[id^="usr-"]')];
-  const order = rows.map(r => r.id.replace('usr-',''));
-  setCustomOrder(US_ORDER_KEY, order);
-  usSortMode = false;
-  g('us-sort-bar').style.display = 'none';
-  g('us-sort-topbtn').style.display = '';
-  rebuildUsageList();
-  toast('食材清單順序已儲存', 'ok');
+async function saveUsOrder() {
+  const saveBtn = document.querySelector('#us-sort-bar .btn.green');
+  if(saveBtn){ saveBtn.classList.add('loading'); saveBtn.textContent='儲存中...'; }
+  try {
+    const rows = [...document.querySelectorAll('#us-body tr[id^="usr-"]')];
+    const items = rows.map((r,i) => ({ '庫存編號': r.id.replace('usr-',''), order: i+1 }));
+    await post({ action:'saveOrder', data:{ orderType:'us', items } });
+    items.forEach(item => {
+      const inv = D.inventory.find(r => r['庫存編號'] === item['庫存編號']);
+      if(inv) inv['食材項次'] = item.order;
+    });
+    usSortMode = false;
+    g('us-sort-bar').style.display = 'none';
+    g('us-sort-topbtn').style.display = '';
+    rebuildUsageList();
+    toast('食材清單順序已儲存（雲端同步）', 'ok');
+  } catch(e) {
+    toast('儲存失敗：' + e.message, 'err');
+  } finally {
+    if(saveBtn){ saveBtn.classList.remove('loading'); saveBtn.textContent='✓ 儲存順序'; }
+  }
 }
 
 // ── 拖曳排序核心 ──────────────────────────
@@ -2406,23 +2435,10 @@ function initDragSort(tbody) {
 })();
 
 // ── 修改 rebuildTransferList 在排序模式加控點 ──
-// (patch：在 rebuildTransferList 執行後，若 trSortMode 則加入控點)
 const _origRebuildTransferList = rebuildTransferList;
 rebuildTransferList = function() {
-  // 先取得自訂順序
-  const customOrder = getCustomOrder(TR_ORDER_KEY);
-  const origFn = _origRebuildTransferList;
-  origFn();
-  // 若有自訂順序且非排序模式，重新排列 DOM 行
-  if(customOrder && !trSortMode) {
-    const tbody = document.querySelector('#tr-body');
-    if(!tbody) return;
-    customOrder.forEach(invId => {
-      const row = document.getElementById('trr-' + invId);
-      if(row) tbody.appendChild(row);
-    });
-  }
-  // 排序模式：加拖曳控點
+  _origRebuildTransferList();
+  // 排序模式：加拖曳控點（排序已由 Sheet 的「配送項次」欄控制，不再用 localStorage）
   if(trSortMode) {
     const tbody = document.querySelector('#tr-body');
     if(!tbody) return;
@@ -2441,17 +2457,8 @@ rebuildTransferList = function() {
 // ── 修改 rebuildUsageList 在排序模式加控點 ──
 const _origRebuildUsageList = rebuildUsageList;
 rebuildUsageList = function() {
-  const customOrder = getCustomOrder(US_ORDER_KEY);
-  const origFn = _origRebuildUsageList;
-  origFn();
-  if(customOrder && !usSortMode) {
-    const tbody = document.querySelector('#us-body');
-    if(!tbody) return;
-    customOrder.forEach(invId => {
-      const row = document.getElementById('usr-' + invId);
-      if(row) tbody.appendChild(row);
-    });
-  }
+  _origRebuildUsageList();
+  // 排序模式：加拖曳控點（排序已由 Sheet 的「食材項次」欄控制，不再用 localStorage）
   if(usSortMode) {
     const tbody = document.querySelector('#us-body');
     if(!tbody) return;

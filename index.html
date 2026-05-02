@@ -278,8 +278,14 @@ label .req-star{font-size:12px}
   /* istrip 簡化 */
   .istrip{font-size:12px;padding:10px 12px}
 
-  /* ══ 進貨/生產 header：日期+星期+建檔人員 同一行 ══ */
-  #page-receive .form-hdr-grid{grid-template-columns:1fr 44px 1fr;gap:6px}
+  /* ══ 進貨/生產 header：日期+星期+建檔人員 同一行，統一列高 ══ */
+  #page-receive .form-hdr-grid{grid-template-columns:1fr 52px 1fr;gap:6px;align-items:stretch}
+  #page-receive .form-hdr-grid .fhg-item{display:flex;flex-direction:column}
+  #page-receive .form-hdr-grid .fi{flex:1;min-height:40px!important;padding:6px 8px!important;font-size:13px!important}
+  #page-receive .form-hdr-grid label{font-size:10px!important}
+  /* 星期欄：字體縮小、置中對齊 */
+  #page-receive .form-hdr-grid .fhg-item:nth-child(2) .fi{font-size:12px!important;text-align:center!important;padding:6px 2px!important}
+  #page-receive .form-hdr-grid .fhg-item:nth-child(2) label{text-align:center}
 
   /* ══ 進貨/生產 batch table → 雙行卡片布局，消除左右滑動 ══ */
   #rc-table thead{display:none}
@@ -291,7 +297,7 @@ label .req-star{font-size:12px}
     grid-template-areas:
       "idx  type  name  invid  qty  del"
       ".    unit  spec  bom    bom  bom";
-    column-gap:5px;row-gap:6px;
+    column-gap:5px;row-gap:10px;
     padding:10px 6px;
     border-bottom:2px solid var(--border2);
     background:var(--surface);
@@ -307,11 +313,27 @@ label .req-star{font-size:12px}
   #rc-table td:nth-child(7){grid-area:spec}
   #rc-table td:nth-child(8){grid-area:bom}
   #rc-table td:nth-child(9){grid-area:del;align-self:center;justify-self:center}
-  #rc-table input,#rc-table select{min-height:44px!important;font-size:14px!important;padding:6px 8px!important}
+  /* 所有輸入框統一高度 44px */
+  #rc-table input,#rc-table select{min-height:44px!important;font-size:14px!important;padding:6px 8px!important;box-sizing:border-box}
   #rc-table .del-btn{min-height:44px!important;min-width:36px!important}
+  /* 進貨時 BOM 欄的「—」dash 撐至同等高度 */
+  #rc-table td:nth-child(8) span{display:flex;align-items:center;min-height:44px;padding:0 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);font-size:13px;color:var(--text3)}
+  /* 欄位小標題（同篩選倉庫 label 字體 11px） */
+  #rc-table td::before{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;white-space:nowrap}
+  #rc-table td:nth-child(1)::before,#rc-table td:nth-child(9)::before{display:none}
+  #rc-table td:nth-child(2)::before{content:'類型'}
+  #rc-table td:nth-child(3)::before{content:'食材名稱 ＊'}
+  #rc-table td:nth-child(4)::before{content:'庫存編號'}
+  #rc-table td:nth-child(5)::before{content:'數量 ＊'}
+  #rc-table td:nth-child(6)::before{content:'單位'}
+  #rc-table td:nth-child(7)::before{content:'規格'}
+  #rc-table td:nth-child(8)::before{content:'BOM編號'}
 
-  /* ══ 倉庫配送 & 每日食材：最小寬度 = 螢幕寬，不得更小 ══ */
-  #tr-table,#us-table{min-width:100%}
+  /* ══ 每日食材：最小寬度 = 螢幕寬 ══ */
+  #us-table{min-width:100%}
+
+  /* ══ 倉庫配送：width:auto 讓內容決定寬度，min-width:100% 保底不小於螢幕 ══ */
+  #tr-table{width:auto!important;min-width:100%!important}
 }
 </style>
 </head>

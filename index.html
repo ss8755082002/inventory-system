@@ -2892,10 +2892,20 @@ async function submitRevert() {
       const rec  = _rvData[idx];
       const name = String(rec['商品名稱']||rec['食材名稱']||'').trim();
       let invCode = String(rec['庫存編號']||'').trim();
-      // 進貨紀錄若 sheet 沒有庫存編號，從 ORDER_ITEMS 補充，確保 GAS 可正確回扣庫存
+      // 進貨紀錄若 sheet 沒有庫存編號，依序從三個來源補充
       if (!invCode && _rvTab === 'purchase') {
-        const ordItem = ORDER_ITEMS.find(i => i.name === name && i.invCode);
-        if (ordItem) invCode = ordItem.invCode;
+        // 1. 從進貨紀錄的 入庫倉庫 + 入庫商品編號 拼出（最可靠）
+        const wh   = String(rec['入庫倉庫']||'').trim();
+        const code = String(rec['入庫商品編號']||'').trim();
+        if (wh && code) {
+          const whCode = wh.includes('317') ? '317' : wh.includes('195') ? '195' : wh.includes('大野') ? '大野' : '';
+          if (whCode) invCode = `${whCode}-${code}`;
+        }
+        // 2. 從 ORDER_ITEMS 補充（叫貨品項有固定 invCode）
+        if (!invCode) {
+          const ordItem = ORDER_ITEMS.find(i => i.name === name && i.invCode);
+          if (ordItem) invCode = ordItem.invCode;
+        }
       }
       return {
         '日期時間': String(rec['日期時間']||'').trim(),
@@ -3455,7 +3465,7 @@ async function ordLinkReceive(checkedItems, vdates, ordUser) {
         for (const c of conv) {
           const factor = parseFloat(String(c['換算係數']||'1').replace(',','')) || 1;
           const rCode  = String(c['庫存編號']||invCode||'');
-          receiveItems.push({ id:'ri_'+(uid++), name:String(c['進貨商品名稱']||item.name), invCode:rCode, wh:String(c['倉庫']||_invCodeToWh(rCode)), unit:String(c['進貨單位']||item.unit), qty:parseFloat((qty*factor).toFixed(4)), include:!!rCode });
+          receiveItems.push({ id:'ri_'+(uid++), name:String(c['進貨商品名稱']||item.name), invCode:rCode, wh:String(c['倉庫']||_invCodeToWh(rCode)), unit:String(c['進貨單位']||item.invUnit||item.unit), qty:parseFloat((qty*factor).toFixed(4)), include:!!rCode });
         }
       } else if (item.beef) {
         receiveItems.push({ id:'ri_'+(uid++), name:item.name, invCode, wh:_invCodeToWh(invCode), unit:'KG', qty:parseFloat((qty*15).toFixed(2)), include:!!invCode });

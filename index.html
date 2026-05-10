@@ -1252,6 +1252,27 @@ async function syncAll(forceRefresh) {
     // usage log：背景不阻塞
     fetchTab('usage').then(r => { D.usageLog = r; }).catch(()=>{});
 
+    // 預載叫貨廠商資料（背景，供食材叫貨清單使用）
+    if (!window._ordVendorCacheLoaded) {
+      Promise.all([
+        fetchTab('vendorGroup'),
+        fetchTab('vendorTpl'),
+      ]).then(([vgRows, tplRows]) => {
+        const sortMap = {};
+        vgRows.forEach(row => {
+          if (row['廠商名稱'] && row['排序'] !== undefined && row['排序'] !== '')
+            sortMap[row['廠商名稱']] = parseInt(row['排序']) || 999;
+        });
+        const gasTpl = {};
+        tplRows.forEach(row => {
+          if (row['廠商名稱']) gasTpl[row['廠商名稱']] = { header: String(row['開頭']||''), footer: String(row['結尾']||'') };
+        });
+        window._ordVendorSortMap = sortMap;
+        window._ordGasTpl = gasTpl;
+        window._ordVendorCacheLoaded = true;
+      }).catch(() => {});
+    }
+
     g('sync-info').textContent = '同步 ' + new Date().toLocaleTimeString('zh-TW');
     const anyOk = D.inventory.length > 0;
     toast(anyOk ? '同步完成' : '⚠ 資料為空，請確認 GAS URL 與分頁名稱', anyOk ? 'ok' : 'err');
@@ -3201,12 +3222,16 @@ function ordPreview() {
 // ── 叫貨紀錄 ─────────────────────────────────────
 let _olData = [], _olFiltered = [], _olPage = 1, _olRowMap = {};
 async function loadOrdLog() {
+  const OL_TTL = 2 * 60 * 1000; // 2 分鐘快取
+  const cached = cacheGet('orderLog', OL_TTL);
+  if (cached) { _olData = cached; filterOL(); return; }
   g('ol-body').innerHTML = '<tr><td colspan="10" class="loading"><div class="spin"></div>載入中...</td></tr>';
   try {
     const r = await fetch(API + '?tab=orderLog&secret=' + API_SECRET);
     const d = await r.json();
     if (d.error) throw new Error('GAS 回傳：' + d.error);
     _olData = d.rows || [];
+    if (_olData.length) cacheSet('orderLog', _olData);
     filterOL();
   } catch(e) {
     g('ol-body').innerHTML = `<tr><td colspan="10" style="color:var(--danger);padding:16px">

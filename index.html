@@ -2112,18 +2112,21 @@ async function submitUsage() {
     }));
     const allRows = [...fixedRows, ...extraRows];
 
-    // 一次 POST 寫入全部消耗紀錄（原本 N 次 → 1 次）
-    await post({ action:'batchAppend', tab:'usage', data:{ rows: allRows } });
+    // 兩個 POST 並行送出（寫入不同 sheet，不互相干擾）
+    await Promise.all([
+      post({ action:'batchAppend', tab:'usage', data:{ rows: allRows } }),
+      fixedInputs.length > 0
+        ? post({ action:'updateInventory', data:{
+            items: fixedInputs.map(input => ({
+              '庫存編號': input.dataset.id,
+              '今日庫存': parseFloat(input.value),
+            }))
+          }})
+        : Promise.resolve(),
+    ]);
 
-    // 一次 POST 更新全部庫存數量
+    // 本地同步更新 D.inventory，不重發 syncAll()
     if(fixedInputs.length > 0) {
-      await post({ action:'updateInventory', data:{
-        items: fixedInputs.map(input => ({
-          '庫存編號': input.dataset.id,
-          '今日庫存': parseFloat(input.value),
-        }))
-      }});
-      // 本地同步更新 D.inventory，不重發 syncAll()
       fixedInputs.forEach(input => {
         const inv = D.inventory.find(r => r['庫存編號'] === input.dataset.id);
         if(inv) inv['數量'] = parseFloat(input.value);
@@ -2888,6 +2891,7 @@ async function submitRevert() {
     const rowKeys = [..._rvChecked].map(idx => ({
       '日期時間': String(_rvData[idx]['日期時間']||'').trim(),
       '庫存編號': String(_rvData[idx]['庫存編號']||'').trim(),
+      '商品名稱': String(_rvData[idx]['商品名稱']||_rvData[idx]['食材名稱']||'').trim(),
     }));
     const delRes = await post({ action: 'deleteRows', data: { tab: _rvTab, rowKeys } });
     toast(`已刪除 ${delRes.deleted||0} 筆紀錄並自動回補庫存`, 'ok');
@@ -2925,20 +2929,20 @@ function toggleTestMode() {
 // 叫貨清單
 // ═══════════════════════════════════════
 const ORDER_ITEMS = [
-  { id:1,  name:'貝果',         vendor:'貝果X一起烘焙坊',                    qty:1,  unit:'箱', spec:'96顆',    needDate:false },
+  { id:1,  name:'貝果',         vendor:'貝果X一起烘焙坊',                    qty:1,  unit:'箱', spec:'96顆',    needDate:false, invUnit:'顆' },
   { id:2,  name:'酸麵包',       vendor:'Mumu酸麵包 叫貨群組',                qty:80, unit:'條', spec:'',        needDate:false },
   { id:3,  name:'漢堡包',       vendor:'漢堡包X等路伴手',                    qty:40, unit:'顆', spec:'',        needDate:false },
-  { id:4,  name:'冷凍鴨胸',     vendor:'鴨胸X振聲',                          qty:1,  unit:'箱', spec:'32塊',   needDate:false },
-  { id:5,  name:'生雞胸',       vendor:'雞胸 叫貨群組',                      qty:2,  unit:'件', spec:'18kg',   needDate:true  },
+  { id:4,  name:'冷凍鴨胸',     vendor:'鴨胸X振聲',                          qty:1,  unit:'箱', spec:'32塊',   needDate:false, invUnit:'塊' },
+  { id:5,  name:'生雞胸',       vendor:'雞胸 叫貨群組',                      qty:2,  unit:'件', spec:'18kg',   needDate:true,  invUnit:'KG' },
   { id:6,  name:'生雞腿',       vendor:'雞胸 叫貨群組',                      qty:1,  unit:'件', spec:'',        needDate:false },
   { id:7,  name:'番茄',         vendor:'番茄 叫貨群組',                      qty:1,  unit:'箱', spec:'10kg',   needDate:false },
-  { id:8,  name:'馬鈴薯',       vendor:'番茄 叫貨群組',                      qty:1,  unit:'箱', spec:'22kg',   needDate:false, invCode:'317-V01' },
-  { id:9,  name:'白雞蛋',       vendor:'双成雞蛋xMuMu',                      qty:1,  unit:'籃', spec:'240顆',  needDate:true,  invCode:'317-E01' },
+  { id:8,  name:'馬鈴薯',       vendor:'番茄 叫貨群組',                      qty:1,  unit:'箱', spec:'22kg',   needDate:false, invCode:'317-V01', invUnit:'KG' },
+  { id:9,  name:'白雞蛋',       vendor:'双成雞蛋xMuMu',                      qty:1,  unit:'籃', spec:'240顆',  needDate:true,  invCode:'317-E01', invUnit:'盤' },
   { id:10, name:'粉蛋',         vendor:'双成雞蛋xMuMu',                      qty:3,  unit:'盤', spec:'30顆/盤',needDate:true  },
   { id:11, name:'牛絞肉',       vendor:'牛絞肉XJust牛',                      qty:1,  unit:'批', spec:'1批=15kg牛+4kg牛油', needDate:true, beef:true },
-  { id:12, name:'南瓜湯',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:5,  unit:'包', spec:'4KG/包', needDate:true,  transfer:true },
+  { id:12, name:'南瓜湯',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:5,  unit:'包', spec:'4KG/包', needDate:true,  transfer:true, invCode:'大野-P20' },
   { id:13, name:'燻培根',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:20, unit:'KG', spec:'',        needDate:true,  invCode:'317-M04' },
-  { id:14, name:'北非醬',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:10, unit:'包', spec:'4KG/包', needDate:true,  transfer:true },
+  { id:14, name:'北非醬',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:10, unit:'包', spec:'4KG/包', needDate:true,  transfer:true, invCode:'大野-P21' },
   { id:15, name:'好醋味葡萄醋', vendor:'葡萄醋X 好醋咪',                    qty:4,  unit:'罐', spec:'',        needDate:false },
 ];
 
@@ -3442,7 +3446,7 @@ async function ordLinkReceive(checkedItems, vdates, ordUser) {
         receiveItems.push({ id:'ri_'+(uid++), name:item.name, invCode, wh:_invCodeToWh(invCode), unit:'KG', qty:parseFloat((qty*15).toFixed(2)), include:!!invCode });
         receiveItems.push({ id:'ri_'+(uid++), name:'牛油', invCode:'', wh:_invCodeToWh(invCode), unit:'KG', qty:parseFloat((qty*4).toFixed(2)), include:false });
       } else {
-        receiveItems.push({ id:'ri_'+(uid++), name:item.name, invCode, wh:_invCodeToWh(invCode), unit:item.unit, qty, include:!!invCode });
+        receiveItems.push({ id:'ri_'+(uid++), name:item.name, invCode, wh:_invCodeToWh(invCode), unit:item.invUnit||item.unit, qty, include:!!invCode });
       }
     }
   } catch(calcErr) {

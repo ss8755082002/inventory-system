@@ -778,10 +778,12 @@ label .req-star{font-size:12px}
       <div class="tw">
         <table class="dt">
           <thead><tr>
-            <th>記錄時間</th><th>到貨日期</th><th>叫貨人員</th>
-            <th>廠商</th><th>品項</th><th>數量</th><th>規格</th><th>狀態</th><th style="width:60px">操作</th>
+            <th>品項</th><th>數量</th><th>規格</th>
+            <th style="min-width:90px">到貨日期</th><th style="width:64px">入庫</th>
+            <th>叫貨人員</th><th>狀態</th><th>廠商</th>
+            <th style="min-width:120px">紀錄時間</th><th style="width:60px">操作</th>
           </tr></thead>
-          <tbody id="ol-body"><tr><td colspan="9" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+          <tbody id="ol-body"><tr><td colspan="10" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
         </table>
       </div>
       <div class="pgn" id="ol-pgn"></div>
@@ -801,7 +803,9 @@ label .req-star{font-size:12px}
         </div>
       </div>
       <div id="ord-vendors"></div>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap;align-items:center">
+        <button id="test-mode-btn" class="btn" onclick="toggleTestMode()"
+          style="border-color:var(--warn);color:var(--warn)">🧪 測試模式：關</button>
         <button class="btn" onclick="ordSelectAll()">全選</button>
         <button class="btn" onclick="ordClearAll()">清除勾選</button>
         <button class="btn green" onclick="ordPreview()">📋 預覽訊息並發送</button>
@@ -815,7 +819,7 @@ label .req-star{font-size:12px}
   <div class="modal-bg" id="ord-link-modal">
     <div class="modal" style="width:700px">
       <div class="modal-hdr">
-        <h2>📥 連結進貨單</h2>
+        <h2>📥 入庫確認</h2>
         <button class="modal-x" onclick="g('ord-link-modal').classList.remove('open')">✕</button>
       </div>
       <div class="modal-body" style="max-height:65vh;overflow-y:auto">
@@ -826,8 +830,8 @@ label .req-star{font-size:12px}
         <div id="ord-link-body"></div>
       </div>
       <div class="modal-foot">
-        <button class="btn" onclick="g('ord-link-modal').classList.remove('open')">稍後手動建立</button>
-        <button class="btn green" id="ord-link-btn" onclick="ordSubmitLinkedReceive()">✓ 確認送出進貨</button>
+        <button class="btn" onclick="g('ord-link-modal').classList.remove('open');window._ordInboundLogKey=null">稍後手動建立</button>
+        <button class="btn green" id="ord-link-btn" onclick="ordSubmitLinkedReceive()">✓ 確認送出</button>
       </div>
     </div>
   </div>
@@ -895,6 +899,7 @@ label .req-star{font-size:12px}
       <div class="modal-foot">
         <button class="btn" onclick="g('ord-modal').classList.remove('open')">取消</button>
         <button class="btn green" id="ord-send-btn" onclick="ordSend()">✓ 確認發送 LINE</button>
+        <div id="ord-test-badge" style="display:none;font-size:11px;color:var(--warn);font-weight:700;padding:4px 10px;background:var(--warn-l);border-radius:var(--r)">🧪 測試模式：LINE 不會發送</div>
       </div>
     </div>
   </div>
@@ -917,6 +922,9 @@ label .req-star{font-size:12px}
   <button class="tab-item" data-p="usage" onclick="nav('usage');closeMoreMenu()">
     <span class="ti">✎</span><span class="tl">使用</span>
   </button>
+  <button class="tab-item" data-p="order" onclick="nav('order');closeMoreMenu()">
+    <span class="ti">📦</span><span class="tl">叫貨</span>
+  </button>
   <button class="tab-item" id="tab-more-btn" onclick="toggleMoreMenu()">
     <span class="ti">⋯</span><span class="tl">更多</span>
   </button>
@@ -929,7 +937,6 @@ label .req-star{font-size:12px}
   <button class="tab-more-item" data-p="consumption"  onclick="nav('consumption');closeMoreMenu()"><span class="ti">↺</span>使用量紀錄</button>
   <button class="tab-more-item" data-p="stock-update" onclick="nav('stock-update');closeMoreMenu()"><span class="ti">🔍</span>物料更新紀錄</button>
   <button class="tab-more-item" data-p="order-log"   onclick="nav('order-log');closeMoreMenu()">  <span class="ti">📨</span>叫貨紀錄</button>
-  <button class="tab-more-item" data-p="order"        onclick="nav('order');closeMoreMenu()"><span class="ti">📦</span>食材叫貨清單</button>
   <div style="border-top:1px solid var(--border);margin:4px 0"></div>
   <button class="tab-more-item" onclick="syncAll();closeMoreMenu()"><span class="ti">↻</span>重新同步</button>
   <button class="tab-more-item" onclick="cacheClear();syncAll(true);closeMoreMenu()"><span class="ti">⟳</span>強制重新載入</button>
@@ -940,6 +947,7 @@ label .req-star{font-size:12px}
 // STATE
 // ═══════════════════════════════════════
 const HARDCODED_API = 'https://script.google.com/macros/s/AKfycbwQc-LI2oaxZGG7X9FX1A69CI52DbXQBPhNe40v29m99nyXKNIrwW1EfGT60CGicu-_hQ/exec';
+const API_SECRET    = 'Mk2026'; // 須與 GAS Script Properties 的 API_SECRET 一致
 let API = HARDCODED_API || localStorage.getItem('inv_api') || '';
 const PS = 100;
 const DAYS = ['日','一','二','三','四','五','六'];
@@ -953,6 +961,22 @@ function twTime() {
 function twTimeShort() {
   return new Date().toLocaleString('sv-SE', {timeZone:'Asia/Taipei'}).slice(11,19);
 }
+// 到貨日期格式：月-日-星期（台灣時區），例：05-10-六
+function fmtArrivalDate() {
+  const dateStr = new Date().toLocaleString('sv-SE', {timeZone:'Asia/Taipei'}).slice(0,10);
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${DAYS[d.getDay()]}`;
+}
+
+// 到貨日期格式化：YYYY-MM-DD → MM-DD（星期X）
+function fmtOrdDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return dateStr;
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${mm}-${dd}（${DAYS[d.getDay()]}）`;
+}
 
 // 數量格式化：最多2位小數，尾零不顯示
 function fmtQty(v) {
@@ -962,7 +986,7 @@ function fmtQty(v) {
 }
 
 let D = {
-  inventory:[], purchase:[], delivery:[], usageLog:[], bom:[], consumption:[], stockUpdate:[]
+  inventory:[], purchase:[], delivery:[], usageLog:[], bom:[], consumption:[], stockUpdate:[], orderConv:[]
 };
 let F = { inventory:[], purchase:[], delivery:[], consumption:[], stockUpdate:[] };
 let PG = { inventory:1, purchase:1, delivery:1, consumption:1, stockUpdate:1 };
@@ -1088,7 +1112,7 @@ async function fetchTab(tab, _retry = true) {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const r = await fetch(`${API}?tab=${tab}`, {
+    const r = await fetch(`${API}?tab=${tab}&secret=${API_SECRET}`, {
       signal: ctrl.signal,
       cache:  'no-store',
     });
@@ -1124,7 +1148,7 @@ async function post(payload) {
     const r = await fetch(API, {
       method:  'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body:    JSON.stringify(payload),
+      body:    JSON.stringify({ ...payload, secret: API_SECRET }),
       signal:  ctrl.signal,
     });
     clearTimeout(timer);
@@ -1146,7 +1170,7 @@ async function post(payload) {
 // ═══════════════════════════════════════
 // SYNC — [v2.5] 兩階段：先取庫存+BOM（渲染主畫面），再背景取紀錄
 // ═══════════════════════════════════════
-const STATIC_TABS  = ['bom'];
+const STATIC_TABS  = ['bom','orderConv'];
 const DYNAMIC_TABS = ['inventory','purchase','consumption','stockUpdate','delivery'];
 const CACHE_TTL    = 5 * 60 * 1000; // BOM 快取 5 分鐘
 const INV_CACHE_TTL = 3 * 60 * 1000; // 庫存快取 3 分鐘
@@ -1186,10 +1210,11 @@ async function syncAll(forceRefresh) {
       }
     }
 
-    const bomCached = forceRefresh ? null : cacheGet('bom');
+    const bomCached  = forceRefresh ? null : cacheGet('bom');
+    const convCached = forceRefresh ? null : cacheGet('orderConv', 10 * 60 * 1000); // 10 分鐘快取
 
     // ── 全部分頁同時平行發請求（不再序列等待）──
-    const [invRows, purchRows, consRows, suRows, delivRows, bomRows] = await Promise.all([
+    const [invRows, purchRows, consRows, suRows, delivRows, bomRows, convRows] = await Promise.all([
       fetchTab('inventory'),
       fetchTab('purchase'),
       fetchTab('consumption'),
@@ -1198,6 +1223,9 @@ async function syncAll(forceRefresh) {
       bomCached
         ? Promise.resolve(bomCached)
         : fetchTab('bom').then(r => { if(r.length) cacheSet('bom', r); return r; }),
+      convCached
+        ? Promise.resolve(convCached)
+        : fetchTab('orderConv').then(r => { if(r.length) cacheSet('orderConv', r); return r; }),
     ]);
 
     const normInv = invRows.map(r => { const n={}; Object.keys(r).forEach(k=>{ n[k.trim()] = typeof r[k]==='string'?r[k].trim():r[k]; }); return n; });
@@ -1207,6 +1235,7 @@ async function syncAll(forceRefresh) {
     D.stockUpdate = suRows;    F.stockUpdate = [...suRows];
     D.delivery    = delivRows; F.delivery    = [...delivRows];
     D.bom         = bomRows;
+    D.orderConv   = convRows;
 
     // 庫存寫入快取供下次秒顯示
     if (invRows.length) cacheSet('inventory', invRows);
@@ -1217,6 +1246,7 @@ async function syncAll(forceRefresh) {
     if(plQ){ const cur=plQ.value; plQ.innerHTML='<option value="">全部食材名稱</option>'+plNames.map(n=>`<option value="${n}">${n}</option>`).join(''); if(cur) plQ.value=cur; }
 
     buildDropdowns();
+    filterInv(); // 套用預設 195 篩選（Q2）
     renderAll();
 
     // usage log：背景不阻塞
@@ -1246,6 +1276,9 @@ function buildDropdowns() {
   const whs  = [...new Set(D.inventory.map(r => String(r['倉庫名稱']||'').trim()).filter(Boolean))];
 
   setOpts('inv-wh',  whs.map(w=>[w,w]), '全部倉庫');
+  // Q2：預設顯示 195（最常用），若用戶已手動切換則保留其選擇
+  const _invWh = g('inv-wh');
+  if (_invWh && !_invWh.value) _invWh.value = '195';
 
   // 庫存總覽商品名稱下拉（所有倉庫，去重排序）
   const allInvNames = [...new Set(
@@ -2708,76 +2741,53 @@ rebuildUsageList = function() {
 };
 
 // ═══════════════════════════════════════
-// 庫存復原 Modal
-// 功能：輸入庫存編號 + 調整數量（正負）→ 呼叫 updateInventory
-// 復原紀錄會寫入物料更新紀錄（來源標示「手動復原」）
+// 庫存復原 Modal（勾選版）
+// 直接列出該分頁紀錄，勾選後送 deleteRows；一律以庫存編號比對
 // ═══════════════════════════════════════
+let _rvTab = '', _rvData = [], _rvChecked = new Set();
+
 function openRevertModal(sourceTab) {
+  _rvTab = sourceTab;
+  _rvData = sourceTab === 'purchase'    ? (D.purchase    || [])
+          : sourceTab === 'delivery'    ? (D.delivery    || [])
+          : sourceTab === 'consumption' ? (D.consumption || [])
+          : [];
+  _rvChecked = new Set();
+
   let modal = g('revert-modal');
-  if(!modal) {
+  if (!modal) {
     modal = document.createElement('div');
     modal.id = 'revert-modal';
     modal.className = 'modal-bg';
     modal.innerHTML = `
-      <div class="modal" style="width:520px">
+      <div class="modal" style="width:700px;max-width:96vw">
         <div class="modal-hdr">
-          <h2>↩ 庫存復原調整</h2>
+          <h2 id="rv-title">↩ 庫存復原</h2>
           <button class="modal-x" onclick="closeRevertModal()">✕</button>
         </div>
-        <div class="modal-body">
-          <div class="istrip blue" style="margin-bottom:14px;font-size:12px">
-            選擇商品並輸入正確數量，系統會更新庫存並寫入物料更新紀錄。<br>
-            若要同時<strong>刪除錯誤紀錄</strong>，請在下方選擇來源分頁和時間。
-          </div>
-
-          <!-- 品項列 -->
-          <div id="revert-rows"></div>
-          <button class="add-row-btn" onclick="addRevertRow()" style="margin-top:8px">＋ 新增品項</button>
-
-          <!-- 刪除錯誤紀錄區 -->
-          <div style="margin-top:16px;padding:12px;background:var(--danger-l);border:1px solid #e8b0a8;border-radius:var(--r)">
-            <div style="font-size:12px;font-weight:700;color:var(--danger);margin-bottom:8px">🗑 同時刪除錯誤紀錄（選填）</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end">
-              <div>
-                <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">來源分頁</label>
-                <select id="revert-del-tab" style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:var(--sans)"
-                  onchange="void 0">
-                  <option value="">不刪除</option>
-                  <option value="purchase">進貨/生產紀錄</option>
-                  <option value="delivery">配送紀錄</option>
-                  <option value="consumption">消耗紀錄</option>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">限定時間（精確到分，可空）</label>
-                <input type="datetime-local" id="revert-del-dt" style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:var(--sans)"
-                  oninput="void 0">
-              </div>
-            </div>
-            <div style="font-size:11px;color:var(--text2);margin-top:6px">⚠ 刪除後無法復原，請確認來源分頁和時間正確。空白時間 = 刪除該商品所有紀錄。</div>
-          </div>
-
-          <div class="ferr" id="revert-err" style="margin-top:8px"></div>
+        <div style="padding:10px 18px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface2)">
+          <label style="font-size:12px;color:var(--text2)">日期篩選</label>
+          <input type="date" id="rv-filter-date" style="padding:5px 8px;border:1px solid var(--border2);border-radius:4px;font-size:12px;font-family:var(--mono)" oninput="renderRvList()">
+          <button class="btn sm" onclick="rvSelectAll(true)">全選</button>
+          <button class="btn sm" onclick="rvSelectAll(false)">清除</button>
+          <span id="rv-count-label" style="font-size:12px;color:var(--text3);margin-left:auto"></span>
         </div>
+        <div id="rv-list" style="max-height:420px;overflow-y:auto"></div>
+        <div class="ferr" id="rv-err" style="margin:6px 18px 0"></div>
         <div class="modal-foot">
           <button class="btn" onclick="closeRevertModal()">取消</button>
-          <button class="btn green" id="revert-submit-btn" onclick="submitRevert()">✓ 執行復原</button>
+          <button class="btn green" id="rv-submit-btn" onclick="submitRevert()">✓ 刪除選取 <span id="rv-sel-count">0</span> 筆</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
   }
-  // 預設選中來源分頁
-  revertDeleteTab = sourceTab === 'purchase' ? 'purchase'
-                  : sourceTab === 'delivery' ? 'delivery'
-                  : sourceTab === 'consumption' ? 'consumption' : '';
-  revertDeleteDt = '';
-  const tabSel = g('revert-del-tab');
-  if(tabSel) tabSel.value = revertDeleteTab;
-  const dtInput = g('revert-del-dt');
-  if(dtInput) dtInput.value = '';
 
-  revertRows = [];
-  addRevertRow();
+  const titleEl = g('rv-title');
+  if (titleEl) titleEl.textContent = '↩ 庫存復原 — ' +
+    (sourceTab === 'purchase' ? '進貨/生產紀錄' : sourceTab === 'delivery' ? '配送紀錄' : '消耗紀錄');
+  const dateEl = g('rv-filter-date');
+  if (dateEl) dateEl.value = '';
+  renderRvList();
   modal.classList.add('open');
 }
 
@@ -2785,161 +2795,110 @@ function closeRevertModal() {
   g('revert-modal')?.classList.remove('open');
 }
 
-let revertRows = [];
-
-function addRevertRow() {
-  const id = Date.now() + revertRows.length;
-  revertRows.push({ id, invId:'', mode:'set' });
-  renderRevertRows();
-}
-
-function renderRevertRows() {
-  const allItems = D.inventory
-    .sort((a,b)=>(parseInt(a['項次'])||999)-(parseInt(b['項次'])||999));
-  const invOpts = allItems.map(r =>
-    `<option value="${r['庫存編號']}">${r['商品名稱']||''} ／ ${r['倉庫名稱']||''} (${r['庫存編號']||''})</option>`
-  ).join('');
-
-  const el = g('revert-rows');
-  if(!el) return;
-  el.innerHTML = revertRows.map((r,i) => {
-    const item = D.inventory.find(x=>x['庫存編號']===r.invId);
-    const curQty = item ? `目前：${fmtQty(parseFloat(item['數量'])||0)} ${item['單位']||''}` : '';
-    return `<div style="display:grid;grid-template-columns:2fr 1fr 1.2fr auto;gap:8px;align-items:center;margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:var(--r)">
-      <div>
-        <label style="font-size:10px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">商品 ${i+1} <span style="font-weight:400;color:var(--text3)">${curQty}</span></label>
-        <select style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:var(--sans)"
-          onchange="updRevertRow(${r.id},'invId',this.value)">
-          <option value="">— 選擇商品 —</option>${invOpts}
-        </select>
-      </div>
-      <div>
-        <label style="font-size:10px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">模式</label>
-        <select style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:var(--sans)"
-          onchange="updRevertRow(${r.id},'mode',this.value)">
-          <option value="set" ${r.mode==='set'?'selected':''}>直接設定</option>
-          <option value="delta" ${r.mode==='delta'?'selected':''}>增減調整</option>
-        </select>
-      </div>
-      <div>
-        <label style="font-size:10px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">${r.mode==='set'?'正確數量':'增減量（±）'}</label>
-        <input type="number" step="0.01" placeholder="${r.mode==='set'?'輸入數量':'+10 或 -5'}"
-          style="width:100%;padding:7px 8px;border:1px solid var(--border2);border-radius:4px;font-size:13px"
-          oninput="updRevertRow(${r.id},'qty',this.value)">
-      </div>
-      <button class="del-btn" onclick="delRevertRow(${r.id})" style="margin-top:18px">✕</button>
-    </div>`;
-  }).join('');
-
-  // restore select values
-  revertRows.forEach(r => {
-    const rows = el.querySelectorAll('div[style*="grid"]');
-    const row  = rows[revertRows.indexOf(r)];
-    if(!row || !r.invId) return;
-    const sel = row.querySelector('select');
-    if(sel) sel.value = r.invId;
+function renderRvList() {
+  const listEl = g('rv-list'), countEl = g('rv-count-label');
+  if (!listEl) return;
+  const dateFilter = (g('rv-filter-date')?.value || '').trim();
+  const filtered = [];
+  _rvData.forEach((rec, i) => {
+    if (dateFilter && !String(rec['日期時間']||'').startsWith(dateFilter)) return;
+    filtered.push({ rec, idx: i });
   });
+  if (countEl) countEl.textContent = `共 ${filtered.length} 筆`;
+  if (!filtered.length) {
+    listEl.innerHTML = '<div style="padding:24px 18px;text-align:center;color:var(--text3);font-size:13px">沒有符合的紀錄</div>';
+    return;
+  }
+  listEl.innerHTML = filtered.map(({ rec, idx }) => {
+    const dt    = String(rec['日期時間']||'').slice(0,16);
+    const invId = String(rec['庫存編號']||'').trim();
+    const name  = String(rec['商品名稱']||rec['食材名稱']||'').trim();
+    const chk   = _rvChecked.has(idx) ? 'checked' : '';
+    let qtyHtml = '';
+    if (_rvTab === 'purchase') {
+      const q = Number(rec['進貨/生產數量']||rec['數量加減']||0);
+      qtyHtml = `<span style="color:var(--accent);font-weight:600;font-family:var(--mono)">+${q}</span>`;
+    } else if (_rvTab === 'delivery') {
+      const q    = Number(rec['數量']||0);
+      const toWh = String(rec['轉入倉庫代號']||'');
+      qtyHtml = `<span style="color:var(--danger);font-family:var(--mono);font-size:11px">${invId}&nbsp;-${q}</span>`
+              + `<span style="color:var(--text3);margin:0 4px">→</span>`
+              + `<span style="color:var(--accent);font-family:var(--mono);font-size:11px">${toWh}&nbsp;+${q}</span>`;
+    } else {
+      const q = Number(rec['消耗數量']||rec['數量']||0);
+      qtyHtml = `<span style="color:var(--danger);font-weight:600;font-family:var(--mono)">-${q}</span>`;
+    }
+    return `<label style="display:flex;gap:10px;align-items:center;padding:9px 18px;border-bottom:1px solid var(--border);cursor:pointer"
+                   onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+      <input type="checkbox" ${chk} onchange="rvToggle(${idx},this.checked)" style="width:15px;height:15px;flex-shrink:0;cursor:pointer">
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0;min-width:106px">${dt}</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text2);flex-shrink:0;min-width:80px">${invId}</span>
+      <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>
+      <span style="font-size:12px;white-space:nowrap">${qtyHtml}</span>
+    </label>`;
+  }).join('');
 }
 
-function updRevertRow(id, key, val) {
-  const r = revertRows.find(x=>x.id===id);
-  if(!r) return;
-  r[key] = val;
-  if(key === 'invId' || key === 'mode') renderRevertRows();
+function rvToggle(idx, checked) {
+  if (checked) _rvChecked.add(idx); else _rvChecked.delete(idx);
+  const el = g('rv-sel-count'); if (el) el.textContent = _rvChecked.size;
 }
-function delRevertRow(id) {
-  revertRows = revertRows.filter(x=>x.id!==id);
-  renderRevertRows();
+
+function rvSelectAll(select) {
+  const dateFilter = (g('rv-filter-date')?.value || '').trim();
+  _rvData.forEach((rec, i) => {
+    if (dateFilter && !String(rec['日期時間']||'').startsWith(dateFilter)) return;
+    if (select) _rvChecked.add(i); else _rvChecked.delete(i);
+  });
+  renderRvList();
+  const el = g('rv-sel-count'); if (el) el.textContent = _rvChecked.size;
 }
 
 async function submitRevert() {
-  const errEl = g('revert-err');
-  errEl.style.display = 'none';
-
-  const valid = revertRows.filter(r => r.invId && r.qty !== '' && r.qty !== undefined);
-  if(!valid.length) {
-    errEl.textContent = '請至少填寫一筆商品和數量';
-    errEl.style.display = 'block';
+  const errEl = g('rv-err');
+  if (errEl) errEl.style.display = 'none';
+  if (_rvChecked.size === 0) {
+    if (errEl) { errEl.textContent = '請先勾選要刪除的紀錄'; errEl.style.display = 'block'; }
     return;
   }
-
-  const btn = g('revert-submit-btn');
-  if(btn){ btn.classList.add('loading'); btn.textContent='執行中...'; }
-
-  // 讀取刪除設定
-  const deleteTab = (g('revert-del-tab')?.value || '').trim();
-  const deleteDt  = (g('revert-del-dt')?.value  || '').trim().replace('T',' ');
-
+  const btn = g('rv-submit-btn');
+  if (btn) { btn.classList.add('loading'); btn.innerHTML = '執行中...'; }
   try {
-    // 1. 計算正確數量並更新庫存（寫入物料更新紀錄，來源=手動復原）
-    const items = valid.map(r => {
-      const item     = D.inventory.find(x=>x['庫存編號']===r.invId);
-      const curQty   = parseFloat(item?.['數量']||0);
-      const inputQty = parseFloat(r.qty);
-      const finalQty = r.mode === 'delta' ? curQty + inputQty : inputQty;
-      return { '庫存編號': r.invId, '今日庫存': finalQty };
-    });
-    await post({ action:'updateInventory', data:{ items }, source:'手動復原' });
-
-    // 2. 若使用者選擇刪除紀錄，建立 rowKeys 傳給 GAS deleteRows
-    let deletedTotal = 0;
-    if(deleteTab) {
-      // 從前端快取資料中找出對應的紀錄（用於建立 rowKeys）
-      const sourceData = deleteTab === 'purchase'    ? D.purchase
-                       : deleteTab === 'delivery'    ? D.delivery
-                       : deleteTab === 'consumption' ? D.consumption
-                       : [];
-
-      // 每個要復原的商品，找出符合條件的紀錄
-      const rowKeys = [];
-      for(const r of valid) {
-        const invItem = D.inventory.find(x=>x['庫存編號']===r.invId);
-        const name = invItem?.['商品名稱'] || '';
-
-        // 找出 sourceData 中符合此庫存編號/商品名稱的紀錄
-        const matched = sourceData.filter(rec => {
-          const recId   = String(rec['庫存編號']  ||'').trim();
-          const recName = String(rec['食材名稱']||rec['商品名稱']||'').trim();
-          const matchesItem = recId === r.invId || recName === name;
-          if(!matchesItem) return false;
-          // 若有指定時間，進一步篩選
-          if(deleteDt) {
-            const recDt = String(rec['日期時間']||'').slice(0,16);
-            return recDt === deleteDt.slice(0,16);
-          }
-          return true;
-        });
-
-        matched.forEach(rec => {
-          rowKeys.push({
-            '日期時間': String(rec['日期時間']||'').trim(),
-            '庫存編號': String(rec['庫存編號']||'').trim(),
-            '食材名稱': String(rec['食材名稱']||rec['商品名稱']||'').trim(),
-          });
-        });
-      }
-
-      if(rowKeys.length > 0) {
-        const delRes = await post({ action:'deleteRows', data:{ tab: deleteTab, rowKeys } });
-        deletedTotal = delRes.deleted || 0;
-      }
-    }
-
-    const delMsg = deletedTotal > 0 ? `，已刪除錯誤紀錄 ${deletedTotal} 筆` : '';
-    toast(`庫存復原完成（${items.length} 項更新${delMsg}）`, 'ok');
+    const rowKeys = [..._rvChecked].map(idx => ({
+      '日期時間': String(_rvData[idx]['日期時間']||'').trim(),
+      '庫存編號': String(_rvData[idx]['庫存編號']||'').trim(),
+    }));
+    const delRes = await post({ action: 'deleteRows', data: { tab: _rvTab, rowKeys } });
+    toast(`已刪除 ${delRes.deleted||0} 筆紀錄並自動回補庫存`, 'ok');
     closeRevertModal();
     syncAll();
   } catch(e) {
-    errEl.textContent = '復原失敗：' + e.message;
-    errEl.style.display = 'block';
+    if (errEl) { errEl.textContent = '執行失敗：' + e.message; errEl.style.display = 'block'; }
   } finally {
-    if(btn){ btn.classList.remove('loading'); btn.innerHTML='✓ 執行復原'; }
+    if (btn) { btn.classList.remove('loading'); btn.innerHTML = `✓ 刪除選取 <span id="rv-sel-count">${_rvChecked.size}</span> 筆`; }
   }
 }
 
-// 儲存「刪除來源分頁」和「刪除時間」的全域變數（由 modal 中的選單控制）
-let revertDeleteTab = '';
-let revertDeleteDt  = '';
+// ── 測試模式 ──
+window._testMode = false;
+function toggleTestMode() {
+  window._testMode = !window._testMode;
+  const btn = g('test-mode-btn');
+  if (!btn) return;
+  if (window._testMode) {
+    btn.textContent = '🧪 測試模式：開';
+    btn.style.background = 'var(--warn-l)';
+    btn.style.borderColor = 'var(--warn)';
+    btn.style.color = 'var(--warn)';
+    btn.style.fontWeight = '700';
+    toast('測試模式已開啟：叫貨紀錄正常寫入，LINE 訊息不會發送', '');
+  } else {
+    btn.textContent = '🧪 測試模式：關';
+    btn.style.background = '';
+    btn.style.fontWeight = '';
+    toast('測試模式已關閉：恢復正常發送', '');
+  }
+}
 
 // ═══════════════════════════════════════
 // 叫貨清單
@@ -2956,9 +2915,9 @@ const ORDER_ITEMS = [
   { id:9,  name:'白雞蛋',       vendor:'双成雞蛋xMuMu',                      qty:1,  unit:'籃', spec:'240顆',  needDate:true,  invCode:'317-E01' },
   { id:10, name:'粉蛋',         vendor:'双成雞蛋xMuMu',                      qty:3,  unit:'盤', spec:'30顆/盤',needDate:true  },
   { id:11, name:'牛絞肉',       vendor:'牛絞肉XJust牛',                      qty:1,  unit:'批', spec:'1批=15kg牛+4kg牛油', needDate:true, beef:true },
-  { id:12, name:'南瓜湯',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:5,  unit:'包', spec:'4KG/包', needDate:true  },
-  { id:13, name:'燻培根',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:20, unit:'KG', spec:'',        needDate:true,  invCode:'大野-M04' },
-  { id:14, name:'北非醬',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:10, unit:'包', spec:'4KG/包', needDate:true  },
+  { id:12, name:'南瓜湯',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:5,  unit:'包', spec:'4KG/包', needDate:true,  transfer:true },
+  { id:13, name:'燻培根',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:20, unit:'KG', spec:'',        needDate:true,  invCode:'317-M04' },
+  { id:14, name:'北非醬',       vendor:'mumu kitchen -大野山牧場 叫貨群組', qty:10, unit:'包', spec:'4KG/包', needDate:true,  transfer:true },
   { id:15, name:'好醋味葡萄醋', vendor:'葡萄醋X 好醋咪',                    qty:4,  unit:'罐', spec:'',        needDate:false },
 ];
 
@@ -2975,6 +2934,10 @@ const VENDOR_DEFAULTS = {
   'mumu kitchen -大野山牧場 叫貨群組':   { header:'(到貨日期)到貨',                                                 footer:'謝謝🙏' },
   '葡萄醋X 好醋咪':                      { header:'您好\n我要再訂',                                                  footer:'' },
 };
+
+function isTransferItem(name) {
+  return ORDER_ITEMS.some(i => i.name === name && i.transfer);
+}
 
 const ORD_TPL_KEY = 'ord_vendor_tpl';
 function ordLoadTpl()      { try { return JSON.parse(localStorage.getItem(ORD_TPL_KEY)||'{}'); } catch(e) { return {}; } }
@@ -3017,8 +2980,8 @@ async function ordRender() {
   if (!window._ordVendorCacheLoaded) {
     try {
       const [vgRes, tplRes] = await Promise.all([
-        fetch(API + '?tab=vendorGroup'),
-        fetch(API + '?tab=vendorTpl'),
+        fetch(API + '?tab=vendorGroup&secret=' + API_SECRET),
+        fetch(API + '?tab=vendorTpl&secret='   + API_SECRET),
       ]);
       const vgData  = await vgRes.json();
       const tplData = await tplRes.json();
@@ -3041,8 +3004,16 @@ async function ordRender() {
 
   // 動態查找庫存編號（item.invCode 優先，再比對庫存）
   const invCodeMap = {};
+  const invLowMap  = {}; // invCode 或 '__n:名稱' → 是否低庫存
   (D.inventory || []).forEach(r => {
-    if (r['商品名稱'] && r['庫存編號']) invCodeMap[r['商品名稱']] = r['庫存編號'];
+    const code = String(r['庫存編號']||'').trim();
+    const name = String(r['商品名稱']||'').trim();
+    if (code) invCodeMap[name] = invCodeMap[name] || code;
+    const qty  = parseFloat(r['數量']) || 0;
+    const safe = parseFloat(r['安全庫存']) || 0;
+    const low  = qty <= 0 || (safe > 0 && qty <= safe);
+    if (code) invLowMap[code]         = invLowMap[code]         || low;
+    if (name) invLowMap['__n:'+name]  = invLowMap['__n:'+name]  || low;
   });
   window._ordInvCodeMap = invCodeMap;
 
@@ -3071,9 +3042,11 @@ async function ordRender() {
       <button onclick="ordEditVendor('${vendor.replace(/'/g,"\\'")}')" style="font-size:10px;padding:2px 7px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--text2)">⚙ 訊息設定</button>`;
 
     items.forEach((item, ii) => {
-      const invCode = item.invCode || invCodeMap[item.name] || '';
-      const borderTop = (vi > 0 && ii === 0) ? 'border-top:2px solid var(--border2)' : '';
-      rows += `<tr style="${borderTop}">
+      const invCode   = item.invCode || invCodeMap[item.name] || '';
+      const isLow     = invCode ? invLowMap[invCode] : invLowMap['__n:'+item.name];
+      const borderTop = (vi > 0 && ii === 0) ? 'border-top:2px solid var(--border2);' : '';
+      const rowBg     = isLow ? 'background:#fce4ec;' : '';
+      rows += `<tr style="${borderTop}${rowBg}">
         <td style="text-align:center"><input type="checkbox" id="ord-chk-${item.id}" style="width:17px;height:17px;cursor:pointer"></td>
         <td>
           <div style="font-weight:600;font-size:13px">${escHtml(item.name)}</div>
@@ -3197,6 +3170,12 @@ function ordPreview() {
         style="width:100%;padding:10px;border:1px solid var(--border2);border-radius:var(--r);font-size:13px;font-family:var(--sans);resize:vertical;line-height:1.7">${escHtml(msg)}</textarea>
     </div>`;
   });
+  // 更新 modal 測試模式提示
+  const badge = g('ord-test-badge');
+  if (badge) badge.style.display = window._testMode ? 'inline-flex' : 'none';
+  const sendBtn = g('ord-send-btn');
+  if (sendBtn) sendBtn.textContent = window._testMode ? '🧪 測試送出（不發 LINE）' : '✓ 確認發送 LINE';
+
   window._ordItemsByVendor = vendorMap;
   window._ordVendors = Object.keys(vendorMap);
   window._ordLabels  = Object.fromEntries(Object.entries(vendorMap).map(([v,items]) => [v, items.map(({item,qty})=>`${item.name}×${qty}${item.unit}`).join('、')]));
@@ -3220,17 +3199,17 @@ function ordPreview() {
 }
 
 // ── 叫貨紀錄 ─────────────────────────────────────
-let _olData = [], _olFiltered = [], _olPage = 1;
+let _olData = [], _olFiltered = [], _olPage = 1, _olRowMap = {};
 async function loadOrdLog() {
-  g('ol-body').innerHTML = '<tr><td colspan="9" class="loading"><div class="spin"></div>載入中...</td></tr>';
+  g('ol-body').innerHTML = '<tr><td colspan="10" class="loading"><div class="spin"></div>載入中...</td></tr>';
   try {
-    const r = await fetch(API + '?tab=orderLog');
+    const r = await fetch(API + '?tab=orderLog&secret=' + API_SECRET);
     const d = await r.json();
     if (d.error) throw new Error('GAS 回傳：' + d.error);
     _olData = d.rows || [];
     filterOL();
   } catch(e) {
-    g('ol-body').innerHTML = `<tr><td colspan="9" style="color:var(--danger);padding:16px">
+    g('ol-body').innerHTML = `<tr><td colspan="10" style="color:var(--danger);padding:16px">
       ❌ 載入失敗：${escHtml(e.message)}<br>
       <span style="font-size:11px;color:var(--text3)">請確認 GAS 已重新部署，且 Google Sheets 存在「叫貨紀錄」工作表。</span>
     </td></tr>`;
@@ -3254,37 +3233,71 @@ function filterOL() {
 }
 function renderOL() {
   const rows = _olFiltered.slice((_olPage-1)*PS, _olPage*PS);
-  g('ol-body').innerHTML = rows.length ? rows.map(r => {
+  _olRowMap = {};
+  g('ol-body').innerHTML = rows.length ? rows.map((r, i) => {
+    _olRowMap[i] = r;
     const vendor = String(r['廠商名稱']||'');
     const 品項  = String(r['品項']||'');
     const 數量  = String(r['數量']||'');
     const 規格  = String(r['規格']||'');
-    // 重傳訊息：優先用原始 LINE 訊息，否則從品項/數量重組
+    const 到貨時間Raw = String(r['到貨時間']||'').trim();
+    let 到貨時間Disp = '—';
+    if (到貨時間Raw) {
+      if (/^\d{4}-/.test(到貨時間Raw)) {
+        // 舊格式時間戳（2025-05-10 11:43:00）→ 轉換成 MM-DD-星期
+        const d = new Date(到貨時間Raw.slice(0,10) + 'T00:00:00');
+        到貨時間Disp = isNaN(d.getTime()) ? 到貨時間Raw.slice(5,10)
+          : `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${DAYS[d.getDay()]}`;
+      } else {
+        到貨時間Disp = 到貨時間Raw; // 新格式 MM-DD-星期，直接顯示
+      }
+    }
+    const 已入庫 = !!到貨時間Raw;
     const rawMsg = String(r['訊息內容']||'');
     const fallbackMsg = 品項
-      ? 品項.split('、').map((p,i) => {
-          const q = (數量.split('、')[i]||'');
-          const s = (規格.split('、')[i]||'');
+      ? 品項.split('、').map((p,j) => {
+          const q = (數量.split('、')[j]||'');
+          const s = (規格.split('、')[j]||'');
           return `${p} ${q}${s?'（'+s+'）':''}`;
         }).join('\n')
       : '';
     const resendMsg = rawMsg || fallbackMsg;
     const vSafe = escHtml(vendor).replace(/'/g,'&#39;');
     const mSafe = escHtml(resendMsg).replace(/'/g,'&#39;');
-    const okColor = r['發送狀態']==='成功' ? 'var(--accent)' : 'var(--danger)';
+    const statusVal = String(r['發送狀態']||'');
+    const statusColor = statusVal==='成功'||statusVal==='已入庫' ? 'var(--accent)' : 'var(--danger)';
+    const 入庫Btn = 已入庫
+      ? `<span class="badge ok" style="font-size:11px;white-space:nowrap">已入庫</span>`
+      : `<button class="btn sm green" onclick="ordDoInbound(${i})" style="white-space:nowrap">入庫</button>`;
     return `<tr>
-    <td style="white-space:nowrap;font-size:12px">${escHtml(String(r['日期時間']||'').slice(0,16))}</td>
-    <td style="white-space:nowrap">${escHtml(String(r['到貨日期']||'').slice(0,10))}</td>
-    <td>${escHtml(String(r['叫貨人員']||''))}</td>
-    <td style="font-size:12px">${escHtml(vendor)}</td>
     <td style="font-size:13px;font-weight:600">${escHtml(品項).replace(/、/g,'<br>')}</td>
     <td style="font-size:13px;white-space:nowrap">${escHtml(數量).replace(/、/g,'<br>')}</td>
     <td style="font-size:12px;color:var(--text3);white-space:nowrap">${escHtml(規格).replace(/、/g,'<br>')}</td>
-    <td><span style="color:${okColor};font-weight:600">${escHtml(String(r['發送狀態']||''))}</span></td>
+    <td style="white-space:nowrap;font-size:12px">${escHtml(到貨時間Disp)}</td>
+    <td>${入庫Btn}</td>
+    <td>${escHtml(String(r['叫貨人員']||''))}</td>
+    <td><span style="color:${statusColor};font-weight:600">${escHtml(statusVal)}</span></td>
+    <td style="font-size:12px">${escHtml(vendor)}</td>
+    <td style="white-space:nowrap;font-size:12px">${escHtml(String(r['日期時間']||'').slice(0,16))}</td>
     <td><button class="btn sm" onclick="ordResendModal('${vSafe}','${mSafe}')">重傳</button></td>
   </tr>`;
-  }).join('') : '<tr><td colspan="9" style="text-align:center;color:var(--text3)">無資料</td></tr>';
+  }).join('') : '<tr><td colspan="10" style="text-align:center;color:var(--text3)">無資料</td></tr>';
   mkPgn('ol-pgn', _olFiltered.length, _olPage, p => { _olPage=p; renderOL(); });
+}
+
+function ordDoInbound(idx) {
+  const r = _olRowMap[idx];
+  if (!r) return;
+  const 品項List = String(r['品項']||'').split('、').map(s => s.trim()).filter(Boolean);
+  const 數量List = String(r['數量']||'').split('、');
+  const vendor   = String(r['廠商名稱']||'');
+  const 到貨日期 = String(r['到貨日期']||'').slice(0,10);
+  window._ordInboundLogKey = { '日期時間': String(r['日期時間']||'').trim(), '廠商名稱': vendor };
+  const checkedItems = 品項List.map((name, i) => {
+    const qty = parseFloat(String(數量List[i]||'')) || 1;
+    return { item: { name, unit: '', spec: '' }, qty, invCode: '' };
+  });
+  ordLinkReceive(checkedItems, { [vendor]: 到貨日期 }, String(r['叫貨人員']||''));
 }
 
 function ordResendModal(vendor, msg) {
@@ -3336,21 +3349,17 @@ async function ordSend() {
   try {
     const res = await post({
       action: 'sendLineOrder',
-      data: { orders, ordDate, ordUser: window._ordUser },
+      data: { orders, ordDate, ordUser: window._ordUser, testMode: !!window._testMode },
       submissionId: window._ordSubmissionId || '',
     });
     if (res.ok) {
       const failed = (res.results || []).filter(r => !r.ok);
       if (!failed.length) {
         window._ordSubmissionId = ''; // 成功後清除，下次開 Modal 會產生新的
-        toast('✓ 所有叫貨訊息已成功發送！', 'ok');
+        toast(window._testMode ? '🧪 測試完成：叫貨紀錄已寫入，LINE 未發送' : '✓ 所有叫貨訊息已成功發送！', 'ok');
         g('ord-modal').classList.remove('open');
         ordClearAll();
-        setTimeout(() => ordLinkReceive(
-          window._ordLastChecked || [],
-          window._ordVdates || {},
-          window._ordUser || ''
-        ), 500);
+        loadOrdLog();
       } else {
         toast('部分失敗：' + failed.map(r => `${r.vendor}（${r.err||'失敗'}）`).join('；'), 'err');
       }
@@ -3378,111 +3387,147 @@ function _invCodeToWh(code) {
 async function ordLinkReceive(checkedItems, vdates, ordUser) {
   if (!checkedItems || !checkedItems.length) return;
 
-  // 讀取叫貨進貨對照表
-  let convRows = [];
-  let convErr  = '';
+  // 區分：配送品項（南瓜湯、北非醬）vs 一般進貨品項
+  const xferRaw = checkedItems.filter(ci => isTransferItem(ci.item.name));
+  const rcvRaw  = checkedItems.filter(ci => !isTransferItem(ci.item.name));
+
+  // 使用同步快取的叫貨進貨對照表（syncAll 已預先載入，不再額外 GET）
+  let convRows = [], convErr = '';
   try {
-    const r = await fetch(API + '?tab=orderConv');
-    const d = await r.json();
-    if (d.error) convErr = d.error;
-    else convRows = (d.rows || []).map(r => {
+    convRows = (D.orderConv || []).map(r => {
       const n = {};
       Object.keys(r).forEach(k => { n[k.trim()] = typeof r[k] === 'string' ? r[k].trim() : r[k]; });
       return n;
     });
   } catch(e) { convErr = e.message; }
 
+  // ── 進貨品項換算 ──
   let receiveItems = [];
   try {
     let uid = 0;
-    for (const { item, qty, invCode } of checkedItems) {
+    for (const { item, qty, invCode } of rcvRaw) {
       const conv = convRows.filter(r => String(r['品項名稱']||'').trim() === item.name);
       if (conv.length > 0) {
         for (const c of conv) {
           const factor = parseFloat(String(c['換算係數']||'1').replace(',','')) || 1;
           const rCode  = String(c['庫存編號']||invCode||'');
-          receiveItems.push({
-            id: 'ri_' + (uid++),
-            name:    String(c['進貨商品名稱']||item.name),
-            invCode: rCode,
-            wh:      String(c['倉庫']||_invCodeToWh(rCode)),
-            unit:    String(c['進貨單位']||item.unit),
-            qty:     parseFloat((qty * factor).toFixed(4)),
-            include: !!rCode,
-          });
+          receiveItems.push({ id:'ri_'+(uid++), name:String(c['進貨商品名稱']||item.name), invCode:rCode, wh:String(c['倉庫']||_invCodeToWh(rCode)), unit:String(c['進貨單位']||item.unit), qty:parseFloat((qty*factor).toFixed(4)), include:!!rCode });
         }
       } else if (item.beef) {
         receiveItems.push({ id:'ri_'+(uid++), name:item.name, invCode, wh:_invCodeToWh(invCode), unit:'KG', qty:parseFloat((qty*15).toFixed(2)), include:!!invCode });
         receiveItems.push({ id:'ri_'+(uid++), name:'牛油', invCode:'', wh:_invCodeToWh(invCode), unit:'KG', qty:parseFloat((qty*4).toFixed(2)), include:false });
       } else {
-        receiveItems.push({
-          id: 'ri_' + (uid++),
-          name:    item.name,
-          invCode: invCode,
-          wh:      _invCodeToWh(invCode),
-          unit:    item.unit,
-          qty:     qty,
-          include: !!invCode,
-        });
+        receiveItems.push({ id:'ri_'+(uid++), name:item.name, invCode, wh:_invCodeToWh(invCode), unit:item.unit, qty, include:!!invCode });
       }
     }
   } catch(calcErr) {
-    toast('進貨連動計算失敗：' + calcErr.message + '。請手動至進貨/生產頁面補登。', 'err');
-    return;
+    toast('進貨連動計算失敗：' + calcErr.message, 'err'); return;
   }
 
-  window._ordLinkItems = receiveItems;
-  // 取第一個有日期的廠商日期作為到貨日
+  // ── 配送品項（大野 → 門市）──
+  let uid2 = 0;
+  const transferItems = xferRaw.map(ci => ({
+    id: 'tr_' + (uid2++),
+    name: ci.item.name,
+    invCode: ci.invCode || '',
+    qty: ci.qty,
+    unit: ci.item.unit || '',
+  }));
+
+  window._ordLinkItems         = receiveItems;
+  window._ordLinkTransferItems = transferItems;
   window._ordLinkDate  = Object.values(vdates||{}).find(v=>v) || new Date().toISOString().slice(0,10);
   window._ordLinkUser  = ordUser;
 
-  // 依倉庫分組渲染
-  const grouped = {};
-  const whOrder = ['195','317','大野'];
-  receiveItems.forEach(r => { const w = r.wh||'未知倉庫'; if(!grouped[w]) grouped[w]=[]; grouped[w].push(r); });
-  const sortedGroups = Object.entries(grouped).sort(([a],[b]) => {
-    const ai = whOrder.indexOf(a), bi = whOrder.indexOf(b);
-    return (ai<0?99:ai) - (bi<0?99:bi);
-  });
-
-  const convNote = convErr
-    ? `<div style="background:var(--warn-l);border:1px solid #e8c560;border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:10px">⚠️ 無法讀取「叫貨進貨對照」表（${escHtml(convErr)}）。請確認 GAS 已重新部署。數量可手動填寫後送出。</div>`
-    : convRows.length === 0
-      ? `<div style="background:var(--info-l);border:1px solid #aac4e0;border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:10px">ℹ️ 尚未建立「叫貨進貨對照」表或表格為空，所有數量保持原始叫貨數量，請確認後送出。</div>`
-      : '';
-  let html = `${convNote}<p style="font-size:12px;color:var(--text2);margin-bottom:12px">依叫貨數量自動計算進貨。勾選的品項才會建立進貨紀錄。庫存編號空白的欄位請手動填入後送出。</p>`;
-  sortedGroups.forEach(([wh, items]) => {
-    html += `<div style="margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--accent);padding:5px 10px;background:var(--accent-l);border-radius:var(--r);margin-bottom:8px">🏬 倉庫：${escHtml(wh)}</div>
+  // ── 配送區塊 HTML ──
+  let xferHtml = '';
+  if (transferItems.length > 0) {
+    xferHtml = `<div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--purple);padding:5px 10px;background:var(--purple-l);border-radius:var(--r);margin-bottom:8px">🚚 倉庫配送（大野山牧場 → 門市）</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">填入大野倉庫的庫存編號、選擇轉入倉庫，確認後建立配送紀錄並更新兩倉庫庫存。</div>
       <div class="tw"><table class="dt" style="width:100%"><thead><tr>
-        <th style="width:32px;text-align:center">勾選</th><th>商品名稱</th>
-        <th style="width:100px">庫存編號</th>
-        <th style="width:85px;text-align:right">數量</th><th style="width:50px">單位</th>
-      </tr></thead><tbody>`;
-    items.forEach(r => {
-      html += `<tr>
-        <td style="text-align:center"><input type="checkbox" id="ol-ri-${r.id}" ${r.include?'checked':''} style="width:16px;height:16px"></td>
-        <td style="font-weight:600">${escHtml(r.name)}</td>
-        <td><input type="text" id="ol-rc-${r.id}" value="${escHtml(r.invCode)}"
-          style="width:96px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-family:var(--mono);font-size:11px;${r.invCode?'':'background:#fff8e1'}"></td>
-        <td style="text-align:right"><input type="number" id="ol-rq-${r.id}" value="${r.qty}" min="0" step="0.01"
-          style="width:72px;text-align:right;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-size:13px"></td>
-        <td style="font-size:12px;color:var(--text2)">${escHtml(r.unit)}</td>
-      </tr>`;
-    });
-    html += `</tbody></table></div></div>`;
-  });
+        <th style="width:32px;text-align:center">勾選</th><th>品名</th>
+        <th style="width:105px">大野庫存編號</th>
+        <th style="width:88px;text-align:center">轉出倉庫</th>
+        <th style="width:88px;text-align:center">轉入倉庫</th>
+        <th style="width:80px;text-align:right">數量</th><th style="width:45px">單位</th>
+      </tr></thead><tbody>
+      ${transferItems.map(t => `<tr>
+        <td style="text-align:center"><input type="checkbox" id="tr-ri-${t.id}" checked style="width:16px;height:16px"></td>
+        <td style="font-weight:600">${escHtml(t.name)}</td>
+        <td><input type="text" id="tr-rc-${t.id}" value="${escHtml(t.invCode)}" placeholder="大野庫存編號"
+          style="width:100px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-family:var(--mono);font-size:11px;${t.invCode?'':'background:#fff8e1'}"></td>
+        <td style="text-align:center"><select id="tr-fw-${t.id}" style="width:78px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-size:12px">
+          <option value="">— 選擇 —</option>
+          <option value="大野" selected>大野</option>
+          <option value="317">317</option>
+          <option value="195">195</option>
+        </select></td>
+        <td style="text-align:center"><select id="tr-wh-${t.id}" style="width:78px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-size:12px">
+          <option value="">— 選擇 —</option>
+          <option value="195" selected>195</option>
+          <option value="317">317</option>
+          <option value="大野">大野</option>
+        </select></td>
+        <td style="text-align:right"><input type="number" id="tr-rq-${t.id}" value="${t.qty}" min="0" step="0.01"
+          style="width:68px;text-align:right;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-size:13px"></td>
+        <td style="font-size:12px;color:var(--text2)">${escHtml(t.unit)}</td>
+      </tr>`).join('')}
+      </tbody></table></div>
+    </div>`;
+  }
 
-  g('ord-link-body').innerHTML = html;
-  g('ord-link-date').textContent = window._ordLinkDate || '';
+  // ── 進貨區塊 HTML ──
+  let rcvHtml = '';
+  if (receiveItems.length > 0) {
+    const grouped = {};
+    const whOrder = ['195','317','大野'];
+    receiveItems.forEach(r => { const w = r.wh||'未知倉庫'; if(!grouped[w]) grouped[w]=[]; grouped[w].push(r); });
+    const sortedGroups = Object.entries(grouped).sort(([a],[b]) => {
+      const ai = whOrder.indexOf(a), bi = whOrder.indexOf(b);
+      return (ai<0?99:ai) - (bi<0?99:bi);
+    });
+    const convNote = convErr
+      ? `<div style="background:var(--warn-l);border:1px solid #e8c560;border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:10px">⚠️ 無法讀取「叫貨進貨對照」表（${escHtml(convErr)}）。請確認 GAS 已重新部署。</div>`
+      : convRows.length === 0
+        ? `<div style="background:var(--info-l);border:1px solid #aac4e0;border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:10px">ℹ️ 尚未建立「叫貨進貨對照」表，數量保持原始叫貨數量。</div>`
+        : '';
+    rcvHtml = `${convNote}<p style="font-size:12px;color:var(--text2);margin-bottom:12px">依叫貨數量自動計算進貨。庫存編號空白請手動填入後送出。</p>`;
+    sortedGroups.forEach(([wh, items]) => {
+      rcvHtml += `<div style="margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);padding:5px 10px;background:var(--accent-l);border-radius:var(--r);margin-bottom:8px">🏬 倉庫：${escHtml(wh)}</div>
+        <div class="tw"><table class="dt" style="width:100%"><thead><tr>
+          <th style="width:32px;text-align:center">勾選</th><th>商品名稱</th>
+          <th style="width:100px">庫存編號</th>
+          <th style="width:85px;text-align:right">數量</th><th style="width:50px">單位</th>
+        </tr></thead><tbody>`;
+      items.forEach(r => {
+        rcvHtml += `<tr>
+          <td style="text-align:center"><input type="checkbox" id="ol-ri-${r.id}" ${r.include?'checked':''} style="width:16px;height:16px"></td>
+          <td style="font-weight:600">${escHtml(r.name)}</td>
+          <td><input type="text" id="ol-rc-${r.id}" value="${escHtml(r.invCode)}"
+            style="width:96px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-family:var(--mono);font-size:11px;${r.invCode?'':'background:#fff8e1'}"></td>
+          <td style="text-align:right"><input type="number" id="ol-rq-${r.id}" value="${r.qty}" min="0" step="0.01"
+            style="width:72px;text-align:right;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-size:13px"></td>
+          <td style="font-size:12px;color:var(--text2)">${escHtml(r.unit)}</td>
+        </tr>`;
+      });
+      rcvHtml += `</tbody></table></div></div>`;
+    });
+  }
+
+  g('ord-link-body').innerHTML = xferHtml + rcvHtml || '<p style="color:var(--text3);text-align:center;padding:16px">無符合的入庫品項</p>';
+  g('ord-link-date').textContent = fmtOrdDate(window._ordLinkDate) || '';
   g('ord-link-user').textContent = window._ordLinkUser || '';
   g('ord-link-modal').classList.add('open');
 }
 
 async function ordSubmitLinkedReceive() {
-  const items = window._ordLinkItems || [];
+  const items     = window._ordLinkItems         || [];
+  const xferItems = window._ordLinkTransferItems || [];
   const btn = g('ord-link-btn');
 
+  // 進貨品項
   const rows = items.filter(r => g('ol-ri-'+r.id)?.checked).map(r => ({
     '食材名稱':      r.name,
     '進貨&生產':     '進貨',
@@ -3491,27 +3536,55 @@ async function ordSubmitLinkedReceive() {
     '入庫倉庫':      r.wh,
     '入庫單位':      r.unit,
     '簽核':          'N',
-  })).filter(r => r['庫存編號']);  // 庫存編號空白則略過
+  })).filter(r => r['庫存編號']);
 
-  if (!rows.length) { toast('請至少勾選一筆有庫存編號的品項', 'err'); return; }
+  // 配送品項（大野 → 門市）
+  const trRows = xferItems.filter(t => g('tr-ri-'+t.id)?.checked).map(t => ({
+    '商品名稱':     t.name,
+    '庫存編號':     (g('tr-rc-'+t.id)?.value || '').trim(),
+    '數量':         parseFloat(g('tr-rq-'+t.id)?.value || t.qty) || 0,
+    '轉出倉庫代號': g('tr-fw-'+t.id)?.value || '',
+    '轉入倉庫代號': g('tr-wh-'+t.id)?.value || '',
+  })).filter(t => t['庫存編號'] && t['轉入倉庫代號'] && t['數量'] > 0);
 
-  const date = window._ordLinkDate || new Date().toISOString().slice(0,10);
-  const d    = new Date(date + 'T00:00:00');
-  const day  = ['日','一','二','三','四','五','六'][d.getDay()];
-  const baseData = { '日期': date, '星期': day, '建檔人員': window._ordLinkUser||'', '建檔時間': twTime() };
+  if (!rows.length && !trRows.length) {
+    toast('請至少勾選一筆有效品項（需填庫存編號）', 'err'); return;
+  }
+
+  const date     = window._ordLinkDate || new Date().toISOString().slice(0,10);
+  const d        = new Date(date + 'T00:00:00');
+  const baseData = { '日期': date, '星期': DAYS[d.getDay()], '建檔人員': window._ordLinkUser||'', '建檔時間': twTime() };
 
   btn.classList.add('loading'); btn.textContent = '送出中...';
+  let errMsg = '';
   try {
-    const res = await post({ action:'appendReceiveAndUpdateStock', data:{ rows, baseData } });
-    if (res.ok !== false) {
-      toast(`✓ 進貨單已建立（${res.appended || rows.length} 筆），庫存已更新`, 'ok');
-      g('ord-link-modal').classList.remove('open');
-      syncAll();
-    } else {
-      toast('進貨送出失敗：' + (res.error || '未知錯誤'), 'err');
+    // 進貨＋配送＋叫貨紀錄更新合併成單一 GAS 呼叫（原本 3 次串行）
+    const res = await post({
+      action: 'inboundAndLog',
+      data: {
+        receiveData:  rows.length   ? { rows, baseData }          : null,
+        deliveryData: trRows.length ? { rows: trRows, baseData }  : null,
+        logKey:       window._ordInboundLogKey || null,
+        arrivalDate:  window._ordInboundLogKey ? fmtArrivalDate() : '',
+      }
+    });
+    if (res.ok === false) errMsg = res.error || '失敗';
+    else {
+      if (res.receive?.ok  === false) errMsg += '進貨：'  + (res.receive.error  || '失敗') + ' ';
+      if (res.delivery?.ok === false) errMsg += '配送：'  + (res.delivery.error || '失敗');
     }
-  } catch(e) { toast('進貨送出失敗：' + e.message, 'err'); }
-  btn.classList.remove('loading'); btn.textContent = '✓ 確認送出進貨';
+  } catch(e) { errMsg = e.message; }
+
+  if (!errMsg) {
+    const parts = [rows.length && `進貨 ${rows.length} 筆`, trRows.length && `配送 ${trRows.length} 筆`].filter(Boolean).join('、');
+    toast(`✓ 已建立 ${parts}，庫存已更新`, 'ok');
+    window._ordInboundLogKey = null;
+    g('ord-link-modal').classList.remove('open');
+    loadOrdLog();
+  } else {
+    toast('送出失敗：' + errMsg, 'err');
+  }
+  btn.classList.remove('loading'); btn.textContent = '✓ 確認送出';
 }
 </script>
 </body>

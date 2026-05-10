@@ -2888,11 +2888,21 @@ async function submitRevert() {
   const btn = g('rv-submit-btn');
   if (btn) { btn.classList.add('loading'); btn.innerHTML = '執行中...'; }
   try {
-    const rowKeys = [..._rvChecked].map(idx => ({
-      '日期時間': String(_rvData[idx]['日期時間']||'').trim(),
-      '庫存編號': String(_rvData[idx]['庫存編號']||'').trim(),
-      '商品名稱': String(_rvData[idx]['商品名稱']||_rvData[idx]['食材名稱']||'').trim(),
-    }));
+    const rowKeys = [..._rvChecked].map(idx => {
+      const rec  = _rvData[idx];
+      const name = String(rec['商品名稱']||rec['食材名稱']||'').trim();
+      let invCode = String(rec['庫存編號']||'').trim();
+      // 進貨紀錄若 sheet 沒有庫存編號，從 ORDER_ITEMS 補充，確保 GAS 可正確回扣庫存
+      if (!invCode && _rvTab === 'purchase') {
+        const ordItem = ORDER_ITEMS.find(i => i.name === name && i.invCode);
+        if (ordItem) invCode = ordItem.invCode;
+      }
+      return {
+        '日期時間': String(rec['日期時間']||'').trim(),
+        '庫存編號': invCode,
+        '商品名稱': name,
+      };
+    });
     const delRes = await post({ action: 'deleteRows', data: { tab: _rvTab, rowKeys } });
     toast(`已刪除 ${delRes.deleted||0} 筆紀錄並自動回補庫存`, 'ok');
     closeRevertModal();
@@ -3323,8 +3333,13 @@ function ordDoInbound(idx) {
   const 到貨日期 = String(r['到貨日期']||'').slice(0,10);
   window._ordInboundLogKey = { '日期時間': String(r['日期時間']||'').trim(), '廠商名稱': vendor };
   const checkedItems = 品項List.map((name, i) => {
-    const qty = parseFloat(String(數量List[i]||'')) || 1;
-    return { item: { name, unit: '', spec: '' }, qty, invCode: '' };
+    const qty     = parseFloat(String(數量List[i]||'')) || 1;
+    const ordItem = ORDER_ITEMS.find(oi => oi.name === name) || {};
+    return {
+      item:    { name, unit: ordItem.unit||'', spec: ordItem.spec||'', invUnit: ordItem.invUnit },
+      qty,
+      invCode: ordItem.invCode || '',
+    };
   });
   ordLinkReceive(checkedItems, { [vendor]: 到貨日期 }, String(r['叫貨人員']||''));
 }

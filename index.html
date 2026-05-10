@@ -1188,7 +1188,7 @@ function cacheSet(key, rows) {
   try { localStorage.setItem('inv_cache_' + key, JSON.stringify({ts:Date.now(), rows})); } catch(e){}
 }
 function cacheClear() {
-  ['bom','inventory'].forEach(k => localStorage.removeItem('inv_cache_' + k));
+  ['bom','inventory','orderLog'].forEach(k => localStorage.removeItem('inv_cache_' + k));
 }
 
 let _syncInProgress = false;

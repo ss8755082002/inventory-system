@@ -349,7 +349,38 @@ label .req-star{font-size:12px}
 
   /* ══ 倉庫配送：width:auto 讓內容決定寬度，min-width:100% 保底不小於螢幕 ══ */
   #tr-table{width:auto!important;min-width:100%!important}
+  /* 叫貨 qty 手機版 */
+  .ord-qty-inp{width:54px;font-size:14px}
+  .ord-item-name{font-size:13px}
 }
+
+/* ══ 叫貨清單 Card Layout ══ */
+.ord-search-bar{width:100%;padding:11px 14px;border:1.5px solid var(--border2);border-radius:var(--r2);font-size:15px;font-family:var(--sans);margin-bottom:12px;box-sizing:border-box}
+.ord-search-bar:focus{outline:none;border-color:var(--accent)}
+/* 第一層：大分類標題（廚房食材 / 外場食材 …） */
+.ord-cat-hdr{font-size:16px;font-weight:800;color:var(--text);letter-spacing:.01em;padding:18px 2px 8px;margin-top:4px;border-bottom:2.5px solid var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+/* 第二層：廠商叫貨群組 card */
+.ord-vendor-card{border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden;margin-bottom:8px}
+.ord-card-hdr{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--surface2);border-bottom:1px solid var(--border2)}
+.ord-card-title{font-size:12px;font-weight:600;color:var(--text2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ord-card-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.ord-vdate-inp{font-size:12px;padding:4px 7px;border:1px solid var(--border2);border-radius:4px;height:30px}
+.ord-cfg-btn{font-size:10px;padding:3px 8px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--text3);height:30px;white-space:nowrap}
+/* 第三層：食材品項 */
+.ord-item-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.ord-item-row.ord-low{background:#fce4ec}
+.ord-item-chk{width:22px;height:22px;cursor:pointer;flex-shrink:0;accent-color:var(--accent)}
+.ord-item-label{flex:1;min-width:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ord-item-name{display:block;font-size:14px;font-weight:400;color:var(--text);line-height:1.3}
+.ord-item-spec{display:block;font-size:11px;color:var(--text3);line-height:1.3}
+.ord-qty-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.ord-qty-inp{width:64px;padding:6px 8px;border:1.5px solid var(--border2);border-radius:6px;text-align:right;font-size:15px;font-weight:600}
+.ord-unit-lbl{font-size:12px;color:var(--text2);white-space:nowrap;min-width:16px}
+.ord-fold-wrap{padding:7px 12px;text-align:center;background:var(--surface2);border-top:1px solid var(--border)}
+.ord-fold-btn{font-size:12px;padding:5px 18px;border:1px solid var(--border2);border-radius:16px;background:var(--surface);cursor:pointer;color:var(--text2)}
+#ord-action-bar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border2);padding:10px 14px;display:flex;gap:8px;align-items:center;z-index:10;box-shadow:0 -2px 10px rgba(0,0,0,.08)}
+#ord-action-bar .btn{flex:1;justify-content:center;text-align:center;padding:11px 6px;font-size:14px;min-width:0}
+#ord-action-bar .btn.green{flex:2}
 </style>
 </head>
 <body>
@@ -792,8 +823,7 @@ label .req-star{font-size:12px}
 
     <!-- ══════════════ 叫貨清單 ══════════════ -->
     <div class="page" id="page-order">
-      <div class="istrip green"><strong>食材叫貨清單</strong>　勾選品項、填入數量，系統自動產生訊息並發送至各廠商 LINE 群組。</div>
-      <div class="form-hdr-grid" style="margin-bottom:14px">
+      <div class="form-hdr-grid" style="margin-bottom:12px">
         <div class="fhg-item">
           <label>叫貨日期</label>
           <input class="fi" id="ord-date-hdr" type="date">
@@ -804,14 +834,15 @@ label .req-star{font-size:12px}
         </div>
       </div>
       <div id="ord-vendors"></div>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap;align-items:center">
-        <button id="test-mode-btn" class="btn" onclick="toggleTestMode()"
-          style="border-color:var(--warn);color:var(--warn)">🧪 測試模式：關</button>
-        <button class="btn" onclick="ordSelectAll()">全選</button>
-        <button class="btn" onclick="ordClearAll()">清除勾選</button>
-        <button class="btn green" onclick="ordPreview()">📋 預覽訊息並發送</button>
-      </div>
       <div class="ferr" id="ord-err"></div>
+    </div>
+    <!-- sticky 叫貨操作列（跨頁常駐，只在叫貨頁顯示） -->
+    <div id="ord-action-bar" style="display:none">
+      <button id="test-mode-btn" class="btn" onclick="toggleTestMode()"
+        style="border-color:var(--warn);color:var(--warn);flex:0 0 auto;padding:9px 10px;font-size:12px">🧪</button>
+      <button class="btn" onclick="ordSelectAll()">全選</button>
+      <button class="btn" onclick="ordClearAll()">清除</button>
+      <button class="btn green" onclick="ordPreview()">📋 預覽並發送</button>
     </div>
 
   </div><!-- /content -->
@@ -1067,6 +1098,8 @@ function nav(name) {
   if(moreEl){ moreEl.classList.add('on'); g('tab-more-btn')?.classList.add('on'); }
   else { g('tab-more-btn')?.classList.remove('on'); }
   if(window.innerWidth < 1024) closeSidebar();
+  const ordBar = g('ord-action-bar');
+  if(ordBar) ordBar.style.display = (name === 'order') ? 'flex' : 'none';
   if(name === 'order')     ordRender();
   if(name === 'order-log') loadOrdLog();
 }
@@ -1211,11 +1244,13 @@ async function syncAll(forceRefresh) {
       }
     }
 
-    const bomCached  = forceRefresh ? null : cacheGet('bom');
-    const convCached = forceRefresh ? null : cacheGet('orderConv', 10 * 60 * 1000); // 10 分鐘快取
+    const bomCached   = forceRefresh ? null : cacheGet('bom');
+    const convCached  = forceRefresh ? null : cacheGet('orderConv',   10 * 60 * 1000);
+    const vgCached    = forceRefresh ? null : cacheGet('vendorGroup', 10 * 60 * 1000);
+    const itemsCached = forceRefresh ? null : cacheGet('orderItems',  10 * 60 * 1000);
 
-    // ── 全部分頁同時平行發請求（不再序列等待）──
-    const [invRows, purchRows, consRows, suRows, delivRows, bomRows, convRows] = await Promise.all([
+    // ── 全部分頁同時平行發請求（含叫貨廠商設定 + 品項）──
+    const [invRows, purchRows, consRows, suRows, delivRows, bomRows, convRows, vgRows, itemRows] = await Promise.all([
       fetchTab('inventory'),
       fetchTab('purchase'),
       fetchTab('consumption'),
@@ -1227,6 +1262,12 @@ async function syncAll(forceRefresh) {
       convCached
         ? Promise.resolve(convCached)
         : fetchTab('orderConv').then(r => { if(r.length) cacheSet('orderConv', r); return r; }),
+      vgCached
+        ? Promise.resolve(vgCached)
+        : fetchTab('vendorGroup').then(r => { if(r.length) cacheSet('vendorGroup', r); return r; }),
+      itemsCached
+        ? Promise.resolve(itemsCached)
+        : fetchTab('orderItems').then(r => { if(r.length) cacheSet('orderItems', r); return r; }),
     ]);
 
     const normInv = invRows.map(r => { const n={}; Object.keys(r).forEach(k=>{ n[k.trim()] = typeof r[k]==='string'?r[k].trim():r[k]; }); return n; });
@@ -1237,6 +1278,32 @@ async function syncAll(forceRefresh) {
     D.delivery    = delivRows; F.delivery    = [...delivRows];
     D.bom         = bomRows;
     D.orderConv   = convRows;
+
+    // 叫貨廠商快取（同步時一次建好，ordRender 不需再 fetch）
+    if (vgRows.length || itemRows.length) {
+      const sortMap = {};
+      vgRows.forEach(row => {
+        if (row['廠商名稱'] && row['排序'] !== undefined && row['排序'] !== '')
+          sortMap[row['廠商名稱']] = parseInt(row['排序']) || 999;
+      });
+      const gasTpl = {};
+      vgRows.forEach(row => {
+        if (row['廠商名稱']) gasTpl[row['廠商名稱']] = { header: String(row['開頭']||''), footer: String(row['結尾']||'') };
+      });
+      const sheetItems = itemRows
+        .filter(r => r['食材名稱'])
+        .map((r, i) => ({
+          id: 9000 + i,
+          name: String(r['食材名稱']).trim(),
+          vendor: String(r['廠商名稱']||'').trim(),
+          unit: String(r['單位']||'').trim(),
+          defaultQty: parseInt(r['預設數量']) || 1,
+        }));
+      window._ordVendorSortMap = sortMap;
+      window._ordGasTpl = gasTpl;
+      if (sheetItems.length) window._ordSheetItems = sheetItems;
+      window._ordVendorCacheLoaded = true;
+    }
 
     // 庫存寫入快取供下次秒顯示
     if (invRows.length) cacheSet('inventory', invRows);
@@ -1252,27 +1319,6 @@ async function syncAll(forceRefresh) {
 
     // usage log：背景不阻塞
     fetchTab('usage').then(r => { D.usageLog = r; }).catch(()=>{});
-
-    // 預載叫貨廠商資料（背景，供食材叫貨清單使用）
-    if (!window._ordVendorCacheLoaded) {
-      Promise.all([
-        fetchTab('vendorGroup'),
-        fetchTab('vendorTpl'),
-      ]).then(([vgRows, tplRows]) => {
-        const sortMap = {};
-        vgRows.forEach(row => {
-          if (row['廠商名稱'] && row['排序'] !== undefined && row['排序'] !== '')
-            sortMap[row['廠商名稱']] = parseInt(row['排序']) || 999;
-        });
-        const gasTpl = {};
-        tplRows.forEach(row => {
-          if (row['廠商名稱']) gasTpl[row['廠商名稱']] = { header: String(row['開頭']||''), footer: String(row['結尾']||'') };
-        });
-        window._ordVendorSortMap = sortMap;
-        window._ordGasTpl = gasTpl;
-        window._ordVendorCacheLoaded = true;
-      }).catch(() => {});
-    }
 
     g('sync-info').textContent = '同步 ' + new Date().toLocaleTimeString('zh-TW');
     const anyOk = D.inventory.length > 0;
@@ -2984,8 +3030,8 @@ const ORDER_ITEMS = [
   { id:2,  name:'酸麵包',       vendor:'Mumu酸麵包 叫貨群組',                qty:80, unit:'條', spec:'',        needDate:false },
   { id:3,  name:'漢堡包',       vendor:'漢堡包X等路伴手',                    qty:40, unit:'顆', spec:'',        needDate:false },
   { id:4,  name:'冷凍鴨胸',     vendor:'鴨胸X振聲',                          qty:1,  unit:'箱', spec:'32塊',   needDate:false, invUnit:'塊' },
-  { id:5,  name:'生雞胸',       vendor:'雞胸 叫貨群組',                      qty:2,  unit:'件', spec:'18kg',   needDate:true,  invUnit:'KG' },
-  { id:6,  name:'生雞腿',       vendor:'雞胸 叫貨群組',                      qty:1,  unit:'件', spec:'',        needDate:false },
+  { id:5,  name:'生雞胸',       vendor:'Mumu 雞胸叫貨群組',                  qty:2,  unit:'件', spec:'18kg',   needDate:true,  invUnit:'KG' },
+  { id:6,  name:'生雞腿',       vendor:'Mumu 雞胸叫貨群組',                  qty:1,  unit:'件', spec:'',        needDate:false },
   { id:7,  name:'番茄',         vendor:'番茄 叫貨群組',                      qty:1,  unit:'箱', spec:'10kg',   needDate:false },
   { id:8,  name:'馬鈴薯',       vendor:'番茄 叫貨群組',                      qty:1,  unit:'箱', spec:'22kg',   needDate:false, invCode:'317-V01', invUnit:'KG' },
   { id:9,  name:'白雞蛋',       vendor:'双成雞蛋xMuMu',                      qty:1,  unit:'籃', spec:'240顆',  needDate:true,  invCode:'317-E01', invUnit:'盤' },
@@ -3003,13 +3049,26 @@ const VENDOR_DEFAULTS = {
   'Mumu酸麵包 叫貨群組':                 { header:'@黃大儒ゆうき 師傅，\n下週需要',                                  footer:'' },
   '漢堡包X等路伴手':                     { header:'明天麻煩',                                                        footer:'謝謝🙏🏼' },
   '鴨胸X振聲':                          { header:'您好\n下週要訂',                                                  footer:'謝謝' },
-  '雞胸 叫貨群組':                       { header:'訂貨名字：mumu kitchen\n送貨日期：(到貨日期)\n訂貨商品數量：',    footer:'請幫我送到\n三民區漢口街317號\n8點後有人\n謝謝\n\n備註1.8胸拆' },
+  'Mumu 雞胸叫貨群組':                    { header:'訂貨名字：mumu kitchen\n送貨日期：(到貨日期)\n訂貨商品數量：',    footer:'請幫我送到\n三民區漢口街317號\n8點後有人\n謝謝\n\n備註1.8胸拆' },
   '番茄 叫貨群組':                       { header:'@冠宇\n\n明天總共需要',                                          footer:'請幫我送十全二路195號\n\n麻煩您，謝謝' },
   '双成雞蛋xMuMu':                       { header:'您好，想訂購',                                                    footer:'到貨日期：(到貨日期)\n麻煩了，謝謝' },
   '牛絞肉XJust牛':                       { header:'午安',                                                            footer:'謝謝\n\n麻煩之後收貨地址改為三民區漢口街317號' },
   'mumu kitchen -大野山牧場 叫貨群組':   { header:'(到貨日期)到貨',                                                 footer:'謝謝🙏' },
   '葡萄醋X 好醋咪':                      { header:'您好\n我要再訂',                                                  footer:'' },
 };
+
+// ── 廠商分類設定（對應廠商設定 Sheet 的排序區間）──
+const VENDOR_CAT_RANGES = [
+  { label:'廚房食材',       icon:'🍳', maxSort:19  },
+  { label:'外場食材',       icon:'🏪', maxSort:27  },
+  { label:'燕麥食材',       icon:'🌾', maxSort:33  },
+  { label:'雜貨',           icon:'🛒', maxSort:38  },
+  { label:'需自行叫貨廠商', icon:'📝', maxSort:9999 },
+];
+function _getVendorCat(sort) {
+  const s = sort || 0;
+  return VENDOR_CAT_RANGES.find(r => s <= r.maxSort) || VENDOR_CAT_RANGES[0];
+}
 
 function isTransferItem(name) {
   return ORDER_ITEMS.some(i => i.name === name && i.transfer);
@@ -3051,32 +3110,58 @@ async function ordRender() {
   const hdrEl = g('ord-date-hdr');
   if (hdrEl && !hdrEl.value) hdrEl.value = new Date().toISOString().slice(0,10);
 
-  // 廠商排序 + 廠商訊息設定：只在第一次或強制刷新時抓，之後直接用快取
+  // 廠商排序 + 廠商訊息設定 + 叫貨品項：只在第一次或強制刷新時抓
   let vendorSortMap = {};
   if (!window._ordVendorCacheLoaded) {
     try {
-      const [vgRes, tplRes] = await Promise.all([
+      const [vgRes, itemsRes] = await Promise.all([
         fetch(API + '?tab=vendorGroup&secret=' + API_SECRET),
-        fetch(API + '?tab=vendorTpl&secret='   + API_SECRET),
+        fetch(API + '?tab=orderItems&secret='  + API_SECRET),
       ]);
-      const vgData  = await vgRes.json();
-      const tplData = await tplRes.json();
+      const vgData    = await vgRes.json();
+      const itemsData = await itemsRes.json();
+
+      // 從「廠商設定」同時建立排序表 + 訊息模板
       const sortMap = {};
+      const gasTpl  = {};
       (vgData.rows || []).forEach(row => {
-        if (row['廠商名稱'] && row['排序'] !== undefined && row['排序'] !== '') {
-          sortMap[row['廠商名稱']] = parseInt(row['排序']) || 999;
-        }
-      });
-      const gasTpl = {};
-      (tplData.rows || []).forEach(row => {
-        if (row['廠商名稱']) gasTpl[row['廠商名稱']] = { header: String(row['開頭']||''), footer: String(row['結尾']||'') };
+        const v = row['廠商名稱'];
+        if (!v) return;
+        if (row['排序'] !== undefined && row['排序'] !== '')
+          sortMap[v] = parseInt(row['排序']) || 999;
+        if (row['開頭'] || row['結尾'])
+          gasTpl[v] = { header: String(row['開頭']||''), footer: String(row['結尾']||'') };
       });
       window._ordVendorSortMap = sortMap;
       window._ordGasTpl = gasTpl;
+
+      // 從「叫貨品項設定」動態建立 ORDER_ITEMS（廠商名稱有填才載入）
+      const sheetItems = (itemsData.rows || []).filter(r =>
+        r['品項名稱'] && r['廠商名稱'] &&
+        String(r['啟用']).toUpperCase() !== 'FALSE'
+      );
+      if (sheetItems.length > 0) {
+        window._ordSheetItems = sheetItems.map((r, idx) => ({
+          id:       2000 + idx,
+          name:     String(r['品項名稱'] || ''),
+          vendor:   String(r['廠商名稱'] || ''),
+          qty:      parseFloat(r['預設數量']) || 1,
+          unit:     String(r['叫貨單位'] || ''),
+          spec:     String(r['規格'] || ''),
+          needDate: String(r['需到貨日期']).toUpperCase() === 'TRUE',
+          invCode:  String(r['庫存編號'] || ''),
+          transfer: String(r['是否轉庫']).toUpperCase() === 'TRUE',
+          beef:     String(r['是否牛肉']).toUpperCase() === 'TRUE',
+        }));
+      }
       window._ordVendorCacheLoaded = true;
     } catch(e) {}
   }
   vendorSortMap = window._ordVendorSortMap || {};
+  // 優先用 Sheet 品項，Sheet 未載入則 fallback 到硬編碼
+  const ACTIVE_ITEMS = (window._ordSheetItems && window._ordSheetItems.length > 0)
+    ? window._ordSheetItems : ORDER_ITEMS;
+  window._ordActiveItems = ACTIVE_ITEMS;
 
   // 動態查找庫存編號（item.invCode 優先，再比對庫存）
   const invCodeMap = {};
@@ -3095,7 +3180,7 @@ async function ordRender() {
 
   // 廠商分組 + 依排序欄排序
   const vendorsObj = {};
-  ORDER_ITEMS.forEach(item => {
+  ACTIVE_ITEMS.forEach(item => {
     if (!vendorsObj[item.vendor]) vendorsObj[item.vendor] = [];
     vendorsObj[item.vendor].push(item);
   });
@@ -3103,58 +3188,68 @@ async function ordRender() {
     const oa = vendorSortMap[a[0]] !== undefined ? vendorSortMap[a[0]] : 999;
     const ob = vendorSortMap[b[0]] !== undefined ? vendorSortMap[b[0]] : 999;
     if (oa !== ob) return oa - ob;
-    return ORDER_ITEMS.findIndex(i => i.vendor === a[0]) - ORDER_ITEMS.findIndex(i => i.vendor === b[0]);
+    return ACTIVE_ITEMS.findIndex(i => i.vendor === a[0]) - ACTIVE_ITEMS.findIndex(i => i.vendor === b[0]);
   });
 
   window._ordVendorIdx = {};
-  let rows = '';
+  let cards = '';
+  let _lastCatLabel = null;
   vendorList.forEach(([vendor, items], vi) => {
     window._ordVendorIdx[vendor] = vi;
-    const hasDate = items.some(i => i.needDate);
-    const dateCell = hasDate
-      ? `<input type="date" id="ord-vdate-${vi}" class="ord-vdate" style="font-size:12px;min-height:30px;padding:3px 7px;border:1px solid var(--border2);border-radius:4px;max-width:140px">`
-      : `<span style="color:var(--text3);font-size:11px">—</span>`;
-    const vendorCell = `<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:5px">📦 ${escHtml(vendor)}</div>
-      <button onclick="ordEditVendor('${vendor.replace(/'/g,"\\'")}')" style="font-size:10px;padding:2px 7px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--text2)">⚙ 訊息設定</button>`;
+    const cat = _getVendorCat(vendorSortMap[vendor]);
+    if (cat.label !== _lastCatLabel) {
+      cards += `<div class="ord-cat-hdr" data-cat="${escHtml(cat.label)}">${cat.icon} ${cat.label}</div>`;
+      _lastCatLabel = cat.label;
+    }
+    const hasDate    = items.some(i => i.needDate);
+    const needFold   = items.length > 3;
+    const extraCount = items.length - 3;
+    const dateHtml   = hasDate
+      ? `<input type="date" id="ord-vdate-${vi}" class="ord-vdate ord-vdate-inp" placeholder="到貨日期">`
+      : '';
+    const safeVendor = vendor.replace(/'/g,"\\'");
 
+    let itemsHtml = '';
     items.forEach((item, ii) => {
-      const invCode   = item.invCode || invCodeMap[item.name] || '';
-      const isLow     = invCode ? invLowMap[invCode] : invLowMap['__n:'+item.name];
-      const borderTop = (vi > 0 && ii === 0) ? 'border-top:2px solid var(--border2);' : '';
-      const rowBg     = isLow ? 'background:#fce4ec;' : '';
-      rows += `<tr style="${borderTop}${rowBg}">
-        <td style="text-align:center"><input type="checkbox" id="ord-chk-${item.id}" style="width:17px;height:17px;cursor:pointer"></td>
-        <td>
-          <div style="font-weight:600;font-size:13px">${escHtml(item.name)}</div>
-          ${item.spec ? `<div style="font-size:10px;color:var(--text3)">${escHtml(item.spec)}</div>` : ''}
-        </td>
-        <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${escHtml(invCode)}</td>
-        <td>
-          <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
-            <input type="number" id="ord-qty-${item.id}" value="${item.qty}" min="0" step="0.1"
-              style="width:65px;padding:5px 7px;border:1px solid var(--border2);border-radius:4px;text-align:right;font-size:14px">
-            <span style="font-size:12px;color:var(--text2);white-space:nowrap">${escHtml(item.unit)}</span>
-          </div>
-        </td>
-        ${ii === 0 ? `<td rowspan="${items.length}" style="vertical-align:middle;text-align:center">${dateCell}</td>
-        <td rowspan="${items.length}" style="vertical-align:top;padding-top:10px">${vendorCell}</td>` : ''}
-      </tr>`;
+      const invCode  = item.invCode || invCodeMap[item.name] || '';
+      const isLow    = invCode ? invLowMap[invCode] : invLowMap['__n:'+item.name];
+      const isExtra  = needFold && ii >= 3;
+      const extraCls = isExtra ? ` ord-extra-${vi}` : '';
+      const lowCls   = isLow ? ' ord-low' : '';
+      const dispStyle= isExtra ? ' style="display:none"' : '';
+      itemsHtml += `<div class="ord-item-row${extraCls}${lowCls}" data-vi="${vi}" data-name="${escHtml(item.name)}"${dispStyle}>
+        <input type="checkbox" id="ord-chk-${item.id}" class="ord-item-chk">
+        <label for="ord-chk-${item.id}" class="ord-item-label">
+          <span class="ord-item-name">${escHtml(item.name)}</span>
+          ${item.spec ? `<span class="ord-item-spec">${escHtml(item.spec)}</span>` : ''}
+        </label>
+        <div class="ord-qty-wrap">
+          <input type="number" id="ord-qty-${item.id}" value="${item.defaultQty ?? item.qty ?? 1}" min="0" step="0.1" class="ord-qty-inp">
+          <span class="ord-unit-lbl">${escHtml(item.unit)}</span>
+        </div>
+      </div>`;
     });
+
+    const foldHtml = needFold
+      ? `<div class="ord-fold-wrap ord-fold-row" id="ord-fold-${vi}" data-vi="${vi}" data-count="${extraCount}">
+           <button class="ord-fold-btn" onclick="ordToggleFold(${vi})">▼ 展開剩餘 ${extraCount} 項</button>
+         </div>`
+      : '';
+
+    cards += `<div class="ord-vendor-card" data-vi="${vi}">
+      <div class="ord-card-hdr">
+        <span class="ord-card-title">📦 ${escHtml(vendor)}</span>
+        <div class="ord-card-actions">
+          ${dateHtml}
+          <button class="ord-cfg-btn" onclick="ordEditVendor('${safeVendor}')">⚙ 設定</button>
+        </div>
+      </div>
+      ${itemsHtml}${foldHtml}
+    </div>`;
   });
 
-  g('ord-vendors').innerHTML = `<div class="tw" style="margin-bottom:14px">
-    <table class="dt" style="width:100%">
-      <thead><tr>
-        <th style="width:36px;text-align:center">勾選</th>
-        <th>品項</th>
-        <th style="width:92px">庫存編號</th>
-        <th style="min-width:118px;text-align:right">數量（規格）</th>
-        <th style="width:130px;text-align:center">到貨日期</th>
-        <th style="min-width:155px">廠商名稱</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
+  g('ord-vendors').innerHTML =
+    `<input id="ord-search" type="search" class="ord-search-bar" placeholder="🔍 搜尋食材名稱…" oninput="ordSearch(this.value)">${cards}`;
 
   if (hdrEl) {
     const syncVdates = () => {
@@ -3168,8 +3263,65 @@ async function ordRender() {
 
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function ordSelectAll() { ORDER_ITEMS.forEach(i => { const c=g('ord-chk-'+i.id); if(c) c.checked=true; }); }
-function ordClearAll()  { ORDER_ITEMS.forEach(i => { const c=g('ord-chk-'+i.id); if(c) c.checked=false; }); }
+// ── 折疊展開 ──────────────────────────────────────────
+function ordToggleFold(vi) {
+  const extras   = document.querySelectorAll(`.ord-extra-${vi}`);
+  const foldWrap = g(`ord-fold-${vi}`);
+  const btn      = foldWrap?.querySelector('button');
+  const count    = foldWrap?.dataset.count || '';
+  const isHidden = extras[0]?.style.display === 'none';
+  extras.forEach(r => r.style.display = isHidden ? '' : 'none');
+  if (btn) btn.innerHTML = isHidden ? '▲ 收起' : `▼ 展開剩餘 ${count} 項`;
+}
+
+// ── 搜尋食材名稱 ──────────────────────────────────────
+function ordSearch(val) {
+  const q = val.trim().toLowerCase();
+  const wrap = g('ord-vendors');
+  if (!wrap) return;
+  if (!q) {
+    // 清空搜尋：還原折疊狀態
+    wrap.querySelectorAll('.ord-item-row').forEach(r => {
+      const vi  = r.dataset.vi;
+      const all = wrap.querySelectorAll(`.ord-item-row[data-vi="${vi}"]`);
+      const idx = Array.from(all).indexOf(r);
+      r.style.display = (idx >= 3 && wrap.querySelector(`#ord-fold-${vi}`)) ? 'none' : '';
+    });
+    wrap.querySelectorAll('.ord-cat-hdr, .ord-fold-row, .ord-vendor-card').forEach(r => r.style.display = '');
+    return;
+  }
+  // 搜尋中：忽略折疊，顯示符合品項所在的 card
+  const visibleCats = new Set();
+  const visibleVis  = new Set();
+  wrap.querySelectorAll('.ord-item-row').forEach(r => {
+    const name = (r.dataset.name || '').toLowerCase();
+    const match = name.includes(q);
+    r.style.display = match ? '' : 'none';
+    if (match) visibleVis.add(r.dataset.vi);
+  });
+  // 折疊按鈕：搜尋中隱藏
+  wrap.querySelectorAll('.ord-fold-row').forEach(r => r.style.display = 'none');
+  // 廠商 card：有符合品項才顯示
+  wrap.querySelectorAll('.ord-vendor-card').forEach(r => {
+    const show = visibleVis.has(String(r.dataset.vi));
+    r.style.display = show ? '' : 'none';
+    if (show) {
+      // 找這個 card 前面的分類 header
+      let prev = r.previousElementSibling;
+      while (prev) {
+        if (prev.classList.contains('ord-cat-hdr')) { visibleCats.add(prev.dataset.cat); break; }
+        prev = prev.previousElementSibling;
+      }
+    }
+  });
+  // 分類標題：有符合才顯示
+  wrap.querySelectorAll('.ord-cat-hdr').forEach(r => {
+    r.style.display = visibleCats.has(r.dataset.cat) ? '' : 'none';
+  });
+}
+
+function ordSelectAll() { (window._ordActiveItems||ORDER_ITEMS).forEach(i => { const c=g('ord-chk-'+i.id); if(c) c.checked=true; }); }
+function ordClearAll()  { (window._ordActiveItems||ORDER_ITEMS).forEach(i => { const c=g('ord-chk-'+i.id); if(c) c.checked=false; }); }
 
 function ordEditVendor(vendor) {
   const vt = ordGetVendorTpl(vendor);
@@ -3412,11 +3564,55 @@ async function ordResendConfirm() {
   btn.classList.remove('loading'); btn.textContent = '↩ 重新發送';
 }
 
+// ── 3分鐘防重複發送 ──────────────────────────────────
+const _ORD_DEDUP_KEY = 'ord_send_dedup';
+const _ORD_DEDUP_TTL = 3 * 60 * 1000;
+
+function _ordDedupCheck(vendors) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(_ORD_DEDUP_KEY) || '{}');
+    const now = Date.now();
+    return vendors.filter(v => stored[v] && (now - stored[v]) < _ORD_DEDUP_TTL);
+  } catch(e) { return []; }
+}
+
+function _ordDedupSave(vendors) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(_ORD_DEDUP_KEY) || '{}');
+    const now = Date.now();
+    vendors.forEach(v => { stored[v] = now; });
+    localStorage.setItem(_ORD_DEDUP_KEY, JSON.stringify(stored));
+  } catch(e) {}
+}
+
 async function ordSend() {
   const btn = g('ord-send-btn');
+  const vendors = window._ordVendors || [];
+
+  // 1. 確認對話框
+  const vendorCount = vendors.length;
+  if (!window.confirm(`確定發送叫貨訊息給 ${vendorCount} 家廠商？\n\n${vendors.join('\n')}`)) return;
+
+  // 2. 3分鐘防重複（測試模式跳過）
+  if (!window._testMode) {
+    const dupes = _ordDedupCheck(vendors);
+    if (dupes.length) {
+      const remain = (() => {
+        try {
+          const stored = JSON.parse(localStorage.getItem(_ORD_DEDUP_KEY) || '{}');
+          const oldest = Math.min(...dupes.map(v => stored[v] || 0));
+          const secs = Math.ceil((_ORD_DEDUP_TTL - (Date.now() - oldest)) / 1000);
+          return secs > 0 ? `（剩餘 ${secs} 秒）` : '';
+        } catch(e) { return ''; }
+      })();
+      toast(`⚠️ 3分鐘內已發送過：${dupes.join('、')} ${remain}，請稍後再試`, 'err');
+      return;
+    }
+  }
+
   btn.classList.add('loading'); btn.textContent = '發送中...';
   const ordDate = g('ord-date-hdr')?.value || '';
-  const orders = (window._ordVendors || []).map((vendor, idx) => {
+  const orders = vendors.map((vendor, idx) => {
     const vItems  = (window._ordItemsByVendor||{})[vendor] || [];
     const msg     = g('ord-msg-'+idx)?.value || '';
     return {
@@ -3440,7 +3636,8 @@ async function ordSend() {
     if (res.ok) {
       const failed = (res.results || []).filter(r => !r.ok);
       if (!failed.length) {
-        window._ordSubmissionId = ''; // 成功後清除，下次開 Modal 會產生新的
+        window._ordSubmissionId = '';
+        if (!window._testMode) _ordDedupSave(vendors); // 成功才記錄防重複
         toast(window._testMode ? '🧪 測試完成：叫貨紀錄已寫入，LINE 未發送' : '✓ 所有叫貨訊息已成功發送！', 'ok');
         g('ord-modal').classList.remove('open');
         ordClearAll();
@@ -3452,10 +3649,9 @@ async function ordSend() {
       toast('發送失敗：' + (res.error || '未知錯誤'), 'err');
     }
   } catch(e) {
-    // 逾時時不清除 submissionId，讓使用者再按一次會走 GAS Cache 拿上次結果
     toast('發送失敗：' + e.message + '（可再按一次確認，系統會避免重複發送）', 'err');
   }
-  btn.classList.remove('loading'); btn.textContent = '✓ 確認發送 LINE';
+  btn.classList.remove('loading'); btn.textContent = window._testMode ? '🧪 測試送出（不發 LINE）' : '✓ 確認發送 LINE';
 }
 
 // ═══════════════════════════════════════

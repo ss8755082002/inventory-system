@@ -408,6 +408,9 @@ label .req-star{font-size:12px}
   <div class="nav-item"   onclick="nav('consumption')"  data-p="consumption"> <span class="nav-icon">↺</span>使用量紀錄</div>
   <div class="nav-item"   onclick="nav('stock-update')" data-p="stock-update"><span class="nav-icon">🔍</span>物料更新紀錄</div>
   <div class="nav-item"   onclick="nav('order-log')"   data-p="order-log">  <span class="nav-icon">📨</span>叫貨紀錄</div>
+  <div class="nav-sec">盤點管理</div>
+  <div class="nav-item" onclick="nav('mat')" data-p="mat"><span class="nav-icon">📦</span>包材盤點</div>
+  <div class="nav-item" onclick="nav('equip')" data-p="equip"><span class="nav-icon">🔧</span>器具盤點</div>
   <div class="sb-bottom">
     <div class="sync-info" id="sync-info">尚未同步</div>
     <button class="btn-resync" onclick="syncAll()">↻ 重新同步</button>
@@ -837,6 +840,72 @@ label .req-star{font-size:12px}
       <div id="ord-vendors"></div>
       <div class="ferr" id="ord-err"></div>
     </div>
+    <!-- ══════════════ 包材盤點 ══════════════ -->
+    <div class="page" id="page-mat">
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn green" onclick="openStockModal('mat','in')">📥 進貨</button>
+        <button class="btn" onclick="openStockModal('mat','adj')">📤 使用量</button>
+        <button class="btn sm" onclick="loadMatPage(true)" style="margin-left:auto">↺ 刷新</button>
+      </div>
+      <div class="tw" style="margin-bottom:20px">
+        <table class="dt" style="width:100%">
+          <thead><tr><th>項次</th><th>名稱</th><th>庫存編號</th><th class="r">數量</th><th>單位</th><th>規格</th><th class="r">安全庫存</th><th>狀態</th></tr></thead>
+          <tbody id="mat-inv-body"><tr><td colspan="8" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="sec-title" style="margin-bottom:8px">異動紀錄</div>
+      <div class="filter-bar" style="margin-bottom:8px">
+        <input type="date" id="mat-log-df" onchange="filterMatLog()">
+        <input type="date" id="mat-log-dt" onchange="filterMatLog()">
+        <select id="mat-log-type" onchange="filterMatLog()">
+          <option value="">全部類型</option>
+          <option>進貨</option>
+          <option>使用量</option>
+        </select>
+      </div>
+      <div class="tw">
+        <table class="dt" style="width:100%">
+          <thead><tr><th>日期</th><th>類型</th><th>名稱</th><th>庫存編號</th><th class="r">數量</th><th>單位</th><th>填表人員</th></tr></thead>
+          <tbody id="mat-log-body"><tr><td colspan="7" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pgn" id="mat-log-pgn"></div>
+    </div>
+
+    <!-- ══════════════ 器具盤點 ══════════════ -->
+    <div class="page" id="page-equip">
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn green" onclick="openStockModal('equip','in')">📥 進貨</button>
+        <button class="btn" onclick="openStockModal('equip','adj')">📤 異動</button>
+        <button class="btn sm" onclick="loadEquipPage(true)" style="margin-left:auto">↺ 刷新</button>
+      </div>
+      <div class="tw" style="margin-bottom:20px">
+        <table class="dt" style="width:100%">
+          <thead><tr><th>項次</th><th>名稱</th><th>庫存編號</th><th class="r">數量</th><th>單位</th><th>規格</th><th class="r">安全庫存</th><th>狀態</th></tr></thead>
+          <tbody id="equip-inv-body"><tr><td colspan="8" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="sec-title" style="margin-bottom:8px">異動紀錄</div>
+      <div class="filter-bar" style="margin-bottom:8px">
+        <input type="date" id="equip-log-df" onchange="filterEquipLog()">
+        <input type="date" id="equip-log-dt" onchange="filterEquipLog()">
+        <select id="equip-log-type" onchange="filterEquipLog()">
+          <option value="">全部類型</option>
+          <option>進貨</option>
+          <option>遺失</option>
+          <option>報廢</option>
+          <option>破損</option>
+        </select>
+      </div>
+      <div class="tw">
+        <table class="dt" style="width:100%">
+          <thead><tr><th>日期</th><th>類型</th><th>名稱</th><th>庫存編號</th><th class="r">數量</th><th>單位</th><th>填表人員</th></tr></thead>
+          <tbody id="equip-log-body"><tr><td colspan="7" class="loading"><div class="spin"></div>載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pgn" id="equip-log-pgn"></div>
+    </div>
+
     <!-- sticky 叫貨操作列（跨頁常駐，只在叫貨頁顯示） -->
     <div id="ord-action-bar" style="display:none">
       <button id="test-mode-btn" class="btn" onclick="toggleTestMode()"
@@ -936,6 +1005,44 @@ label .req-star{font-size:12px}
       </div>
     </div>
   </div>
+
+  <!-- 包材 / 器具 進貨 & 異動 Modal -->
+  <div class="modal-bg" id="sc-modal">
+    <div class="modal" style="width:600px;max-width:96vw">
+      <div class="modal-hdr">
+        <h2 id="sc-modal-title">進貨</h2>
+        <button class="modal-x" onclick="closeScModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="frow2" style="margin-bottom:12px">
+          <div class="fhg-item">
+            <label>填表人員<span class="req-star">＊</span></label>
+            <select class="fi" id="sc-user"><option value="">— 選擇 —</option></select>
+          </div>
+          <div class="fhg-item">
+            <label>日期</label>
+            <input class="fi" type="date" id="sc-date">
+          </div>
+        </div>
+        <!-- 異動類型（器具異動才顯示）-->
+        <div id="sc-type-row" style="display:none;margin-bottom:12px">
+          <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">異動類型<span class="req-star">＊</span></label>
+          <select class="fi" id="sc-type">
+            <option value="">— 選擇類型 —</option>
+          </select>
+        </div>
+        <!-- 品項列 -->
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">品項</div>
+        <div id="sc-rows"></div>
+        <button class="btn sm" onclick="scAddRow()" style="margin-top:8px">＋ 新增品項</button>
+      </div>
+      <div class="modal-foot">
+        <span class="ferr" id="sc-err" style="margin-right:auto;display:inline"></span>
+        <button class="btn" onclick="closeScModal()">取消</button>
+        <button class="btn green" id="sc-submit-btn" onclick="scSubmit()">送出</button>
+      </div>
+    </div>
+  </div>
 </div><!-- /main -->
 </div><!-- /app -->
 
@@ -970,6 +1077,8 @@ label .req-star{font-size:12px}
   <button class="tab-more-item" data-p="consumption"  onclick="nav('consumption');closeMoreMenu()"><span class="ti">↺</span>使用量紀錄</button>
   <button class="tab-more-item" data-p="stock-update" onclick="nav('stock-update');closeMoreMenu()"><span class="ti">🔍</span>物料更新紀錄</button>
   <button class="tab-more-item" data-p="order-log"   onclick="nav('order-log');closeMoreMenu()">  <span class="ti">📨</span>叫貨紀錄</button>
+  <button class="tab-more-item" data-p="mat"   onclick="nav('mat');closeMoreMenu()"><span class="ti">📦</span>包材盤點</button>
+  <button class="tab-more-item" data-p="equip" onclick="nav('equip');closeMoreMenu()"><span class="ti">🔧</span>器具盤點</button>
   <div style="border-top:1px solid var(--border);margin:4px 0"></div>
   <button class="tab-more-item" onclick="syncAll();closeMoreMenu()"><span class="ti">↻</span>重新同步</button>
   <button class="tab-more-item" onclick="cacheClear();syncAll(true);closeMoreMenu()"><span class="ti">⟳</span>強制重新載入</button>
@@ -1035,6 +1144,8 @@ const PAGE_META = {
   'stock-update':['物料更新紀錄',  '庫存數量異動追蹤，供異常查詢用'],
   order:         ['食材叫貨清單',   '勾選品項，自動產生訊息並發送至廠商 LINE 群組'],
   'order-log':   ['叫貨紀錄',      '歷史叫貨訊息查詢'],
+  mat:           ['包材盤點',       '包材進出貨紀錄與庫存管理'],
+  equip:         ['器具盤點',       '器具進出貨與異動紀錄'],
 };
 
 // ═══════════════════════════════════════
@@ -1105,6 +1216,8 @@ function nav(name) {
   if(name === 'order-log')   loadOrdLog();
   if(name === 'consumption')  loadConsumption();
   if(name === 'stock-update') loadStockUpdate();
+  if(name === 'mat')   loadMatPage();
+  if(name === 'equip') loadEquipPage();
 }
 
 function toggleSidebar() {
@@ -3392,7 +3505,7 @@ function ordPreview() {
   const errEl = g('ord-err');
   errEl.style.display = 'none';
   if (!user) { errEl.textContent='請選擇叫貨人員'; errEl.style.display='block'; return; }
-  const checked = ORDER_ITEMS.filter(item => g('ord-chk-'+item.id)?.checked);
+  const checked = (window._ordActiveItems || []).filter(item => g('ord-chk-'+item.id)?.checked);
   if (!checked.length) { errEl.textContent='請至少勾選一個品項'; errEl.style.display='block'; return; }
 
   // 驗證有 needDate 的廠商要填日期
@@ -3892,6 +4005,246 @@ async function ordSubmitLinkedReceive() {
     toast('送出失敗：' + errMsg, 'err');
   }
   btn.classList.remove('loading'); btn.textContent = '✓ 確認送出';
+}
+
+// ═══════════════════════════════════════
+// 包材 / 器具 盤點
+// ═══════════════════════════════════════
+const SC_TYPES = {
+  mat:   { inv:'matInventory',   log:'matLog',   adjTypes:['使用量'] },
+  equip: { inv:'equipInventory', log:'equipLog', adjTypes:['遺失','報廢','破損'] },
+};
+let _scCategory = 'mat';   // 'mat' | 'equip'
+let _scMode     = 'in';    // 'in' | 'adj'
+
+// 資料存放
+const SC_D = { matInv:[], matLog:[], equipInv:[], equipLog:[] };
+let _matLoading = false, _equipLoading = false;
+let _matLogAll = [], _equipLogAll = [];
+let _matLogPage = 1, _equipLogPage = 1;
+
+// ── Lazy Load ──────────────────────────────────────────
+async function loadMatPage(force) {
+  if (_matLoading) return;
+  _matLoading = true;
+  try {
+    const [inv, log] = await Promise.all([
+      (force || !SC_D.matInv.length)  ? fetchTab('matInventory') : Promise.resolve(SC_D.matInv),
+      (force || !SC_D.matLog.length)  ? fetchTab('matLog', true, 100) : Promise.resolve(SC_D.matLog),
+    ]);
+    SC_D.matInv = inv;
+    SC_D.matLog = log;
+    _matLogAll  = [...log];
+    renderMatInv();
+    filterMatLog();
+    syncScUserList();
+  } catch(e) {
+    g('mat-inv-body').innerHTML = `<tr><td colspan="8" style="color:var(--danger);padding:16px">載入失敗：${escHtml(e.message)}</td></tr>`;
+  }
+  _matLoading = false;
+}
+
+async function loadEquipPage(force) {
+  if (_equipLoading) return;
+  _equipLoading = true;
+  try {
+    const [inv, log] = await Promise.all([
+      (force || !SC_D.equipInv.length) ? fetchTab('equipInventory') : Promise.resolve(SC_D.equipInv),
+      (force || !SC_D.equipLog.length) ? fetchTab('equipLog', true, 100) : Promise.resolve(SC_D.equipLog),
+    ]);
+    SC_D.equipInv = inv;
+    SC_D.equipLog = log;
+    _equipLogAll  = [...log];
+    renderEquipInv();
+    filterEquipLog();
+    syncScUserList();
+  } catch(e) {
+    g('equip-inv-body').innerHTML = `<tr><td colspan="8" style="color:var(--danger);padding:16px">載入失敗：${escHtml(e.message)}</td></tr>`;
+  }
+  _equipLoading = false;
+}
+
+// ── 渲染庫存表格 ──────────────────────────────────────
+function renderMatInv()  { _renderScInv(SC_D.matInv,   'mat-inv-body'); }
+function renderEquipInv(){ _renderScInv(SC_D.equipInv, 'equip-inv-body'); }
+function _renderScInv(rows, bodyId) {
+  const el = g(bodyId);
+  if (!rows.length) { el.innerHTML = '<tr><td colspan="8" style="color:var(--text3);padding:16px;text-align:center">尚無資料</td></tr>'; return; }
+  el.innerHTML = rows.map(r => {
+    const qty  = parseFloat(r['數量']) || 0;
+    const safe = parseFloat(r['安全庫存']) || 0;
+    const low  = qty <= 0 || (safe > 0 && qty <= safe);
+    const bg   = low ? 'background:#fce4ec' : '';
+    return `<tr style="${bg}">
+      <td>${escHtml(String(r['項次']||''))}</td>
+      <td style="font-weight:600">${escHtml(String(r['名稱']||''))}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${escHtml(String(r['庫存編號']||''))}</td>
+      <td class="r" style="font-weight:700${low?';color:var(--danger)':''}">${qty}</td>
+      <td>${escHtml(String(r['單位']||''))}</td>
+      <td style="color:var(--text3);font-size:12px">${escHtml(String(r['規格']||''))}</td>
+      <td class="r" style="color:var(--text3)">${escHtml(String(r['安全庫存']||''))}</td>
+      <td>${escHtml(String(r['狀態']||''))}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 紀錄篩選 ──────────────────────────────────────────
+function filterMatLog() {
+  const df = gv('mat-log-df'), dt = gv('mat-log-dt'), tp = gv('mat-log-type');
+  _matLogAll = SC_D.matLog.filter(r => {
+    const d = String(r['日期']||r['日期時間']||'').slice(0,10);
+    if (df && d < df) return false;
+    if (dt && d > dt) return false;
+    if (tp && r['類型'] !== tp) return false;
+    return true;
+  });
+  _matLogPage = 1; renderMatLog();
+}
+function filterEquipLog() {
+  const df = gv('equip-log-df'), dt = gv('equip-log-dt'), tp = gv('equip-log-type');
+  _equipLogAll = SC_D.equipLog.filter(r => {
+    const d = String(r['日期']||r['日期時間']||'').slice(0,10);
+    if (df && d < df) return false;
+    if (dt && d > dt) return false;
+    if (tp && r['類型'] !== tp) return false;
+    return true;
+  });
+  _equipLogPage = 1; renderEquipLog();
+}
+function renderMatLog()   { _renderScLog(_matLogAll,   'mat-log-body',   'mat-log-pgn',   _matLogPage,   p=>{ _matLogPage=p; renderMatLog(); }); }
+function renderEquipLog() { _renderScLog(_equipLogAll, 'equip-log-body', 'equip-log-pgn', _equipLogPage, p=>{ _equipLogPage=p; renderEquipLog(); }); }
+function _renderScLog(rows, bodyId, pgnId, page, setPage) {
+  const el = g(bodyId);
+  if (!rows.length) { el.innerHTML = '<tr><td colspan="7" style="color:var(--text3);padding:16px;text-align:center">尚無紀錄</td></tr>'; g(pgnId).innerHTML=''; return; }
+  const slice = rows.slice((page-1)*PS, page*PS);
+  el.innerHTML = slice.map(r => `<tr>
+    <td>${escHtml(String(r['日期']||String(r['日期時間']||'').slice(0,10)))}</td>
+    <td><span class="badge ${r['類型']==='進貨'?'ok':'gray'}">${escHtml(String(r['類型']||''))}</span></td>
+    <td style="font-weight:600">${escHtml(String(r['名稱']||''))}</td>
+    <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${escHtml(String(r['庫存編號']||''))}</td>
+    <td class="r">${escHtml(String(r['變動數量']||''))}</td>
+    <td>${escHtml(String(r['單位']||''))}</td>
+    <td>${escHtml(String(r['填表人員']||''))}</td>
+  </tr>`).join('');
+  // 分頁
+  const total = Math.ceil(rows.length / PS);
+  g(pgnId).innerHTML = total <= 1 ? '' : Array.from({length:total}, (_,i) => i+1)
+    .map(i => `<button class="pgn-btn${i===page?' on':''}" onclick="(${setPage.toString()})(${i})">${i}</button>`).join('');
+}
+
+// ── 人員清單同步 ──────────────────────────────────────
+function syncScUserList() {
+  const src = g('ord-user');
+  const dst = g('sc-user');
+  if (!src || !dst) return;
+  const cur = dst.value;
+  dst.innerHTML = src.innerHTML;
+  if (cur) dst.value = cur;
+}
+
+// ── Modal 開關 ────────────────────────────────────────
+function openStockModal(category, mode) {
+  _scCategory = category;
+  _scMode     = mode;
+  const cfg   = SC_TYPES[category];
+  const isAdj = mode === 'adj';
+
+  const titles = { mat:{ in:'📥 包材進貨', adj:'📤 包材使用量' }, equip:{ in:'📥 器具進貨', adj:'📤 器具異動' } };
+  g('sc-modal-title').textContent = titles[category][mode];
+
+  if (!g('sc-date').value) g('sc-date').value = new Date().toISOString().slice(0,10);
+
+  const typeRow = g('sc-type-row');
+  const typeEl  = g('sc-type');
+  if (isAdj && cfg.adjTypes.length > 1) {
+    typeEl.innerHTML = '<option value="">— 選擇類型 —</option>' + cfg.adjTypes.map(t=>`<option>${t}</option>`).join('');
+    typeRow.style.display = '';
+  } else {
+    typeRow.style.display = 'none';
+    if (isAdj) typeEl.value = cfg.adjTypes[0];
+  }
+
+  syncScUserList();
+
+  g('sc-rows').innerHTML = '';
+  scAddRow();
+
+  g('sc-err').textContent = '';
+  g('sc-modal').classList.add('open');
+}
+function closeScModal() { g('sc-modal').classList.remove('open'); }
+
+// ── 品項列 ────────────────────────────────────────────
+function scAddRow() {
+  const inv  = _scCategory === 'mat' ? SC_D.matInv : SC_D.equipInv;
+  const opts = inv.map(r => `<option value="${escHtml(String(r['庫存編號']||''))}" data-unit="${escHtml(String(r['單位']||''))}" data-name="${escHtml(String(r['名稱']||''))}">${escHtml(String(r['名稱']||''))}</option>`).join('');
+  const div  = document.createElement('div');
+  div.className = 'sc-row';
+  div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+  div.innerHTML = `
+    <select class="fi sc-item" style="flex:1;min-width:0" onchange="scRowItemChange(this)">
+      <option value="">— 選擇品項 —</option>${opts}
+    </select>
+    <input type="number" class="fi sc-qty" placeholder="數量" min="0" step="0.1" style="width:80px;text-align:right">
+    <span class="sc-unit" style="font-size:12px;color:var(--text2);min-width:24px"></span>
+    <button onclick="this.parentElement.remove()" style="flex-shrink:0;background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0 4px">✕</button>
+  `;
+  g('sc-rows').appendChild(div);
+}
+function scRowItemChange(sel) {
+  const opt  = sel.options[sel.selectedIndex];
+  const unit = opt?.dataset?.unit || '';
+  sel.closest('.sc-row').querySelector('.sc-unit').textContent = unit;
+}
+
+// ── 送出 ──────────────────────────────────────────────
+async function scSubmit() {
+  const errEl = g('sc-err');
+  errEl.textContent = '';
+
+  const user = g('sc-user').value;
+  const date = g('sc-date').value;
+  if (!user) { errEl.textContent = '請選擇填表人員'; return; }
+
+  const cfg   = SC_TYPES[_scCategory];
+  const isAdj = _scMode === 'adj';
+  let type;
+  if (!isAdj) {
+    type = '進貨';
+  } else if (cfg.adjTypes.length === 1) {
+    type = cfg.adjTypes[0];
+  } else {
+    type = g('sc-type').value;
+    if (!type) { errEl.textContent = '請選擇異動類型'; return; }
+  }
+
+  const items = [];
+  const inv   = _scCategory === 'mat' ? SC_D.matInv : SC_D.equipInv;
+  for (const row of g('sc-rows').children) {
+    const sel  = row.querySelector('.sc-item');
+    const qtyEl= row.querySelector('.sc-qty');
+    const code = sel?.value;
+    const qty  = parseFloat(qtyEl?.value);
+    if (!code || !qty || qty <= 0) continue;
+    const invRow = inv.find(r => String(r['庫存編號']||'') === code);
+    items.push({ 庫存編號: code, 名稱: invRow?.['名稱']||'', 數量: qty, 單位: invRow?.['單位']||'' });
+  }
+  if (!items.length) { errEl.textContent = '請至少填入一個品項與數量'; return; }
+
+  const btn = g('sc-submit-btn');
+  btn.classList.add('loading'); btn.textContent = '送出中...';
+  try {
+    const res = await post({ action:'stockChange', data:{ category:_scCategory, type, items, user, date } });
+    if (res.ok) {
+      toast(`${type} 完成，已更新 ${res.updated} 項`, 'ok');
+      closeScModal();
+      if (_scCategory === 'mat')  { SC_D.matInv=[]; SC_D.matLog=[];   loadMatPage(); }
+      else                         { SC_D.equipInv=[]; SC_D.equipLog=[]; loadEquipPage(); }
+    } else {
+      errEl.textContent = '送出失敗：' + (res.error || '未知錯誤');
+    }
+  } catch(e) { errEl.textContent = '錯誤：' + e.message; }
+  btn.classList.remove('loading'); btn.textContent = '送出';
 }
 </script>
 </body>

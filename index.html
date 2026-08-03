@@ -863,6 +863,7 @@ label .req-star{font-size:12px}
           <option>使用量</option>
         </select>
       </div>
+      <div id="mat-log-summary" style="display:none;background:var(--accent-l);border:1px solid var(--accent-m);border-radius:var(--r2);padding:12px 14px;margin-bottom:12px"></div>
       <div class="tw">
         <table class="dt" style="width:100%">
           <thead><tr><th>日期</th><th>類型</th><th>名稱</th><th>庫存編號</th><th class="r">數量</th><th>單位</th><th>填表人員</th></tr></thead>
@@ -897,6 +898,7 @@ label .req-star{font-size:12px}
           <option>破損</option>
         </select>
       </div>
+      <div id="equip-log-summary" style="display:none;background:var(--accent-l);border:1px solid var(--accent-m);border-radius:var(--r2);padding:12px 14px;margin-bottom:12px"></div>
       <div class="tw">
         <table class="dt" style="width:100%">
           <thead><tr><th>日期</th><th>類型</th><th>名稱</th><th>庫存編號</th><th class="r">數量</th><th>單位</th><th>填表人員</th></tr></thead>
@@ -1128,7 +1130,7 @@ function fmtQty(v) {
 }
 
 let D = {
-  inventory:[], purchase:[], delivery:[], usageLog:[], bom:[], consumption:[], stockUpdate:[], orderConv:[]
+  inventory:[], purchase:[], delivery:[], usageLog:[], bom:[], consumption:[], stockUpdate:[]
 };
 let F = { inventory:[], purchase:[], delivery:[], consumption:[], stockUpdate:[] };
 let PG = { inventory:1, purchase:1, delivery:1, consumption:1, stockUpdate:1 };
@@ -1212,8 +1214,10 @@ function nav(name) {
   if(window.innerWidth < 1024) closeSidebar();
   const ordBar = g('ord-action-bar');
   if(ordBar) ordBar.style.display = (name === 'order') ? 'flex' : 'none';
-  if(name === 'order')        ordRender();
-  if(name === 'order-log')   loadOrdLog();
+  if(name === 'order')         ordRender();
+  if(name === 'order-log')    loadOrdLog();
+  if(name === 'purchase-log') loadPurchaseLog();
+  if(name === 'delivery-log') loadDeliveryLog();
   if(name === 'consumption')  loadConsumption();
   if(name === 'stock-update') loadStockUpdate();
   if(name === 'mat')   loadMatPage();
@@ -1321,7 +1325,7 @@ async function post(payload) {
 // ═══════════════════════════════════════
 // SYNC — [v2.5] 兩階段：先取庫存+BOM（渲染主畫面），再背景取紀錄
 // ═══════════════════════════════════════
-const STATIC_TABS  = ['bom','orderConv'];
+const STATIC_TABS  = ['bom'];
 const DYNAMIC_TABS = ['inventory','purchase','consumption','stockUpdate','delivery'];
 const CACHE_TTL    = 5 * 60 * 1000; // BOM 快取 5 分鐘
 const INV_CACHE_TTL = 3 * 60 * 1000; // 庫存快取 3 分鐘
@@ -1362,21 +1366,15 @@ async function syncAll(forceRefresh) {
     }
 
     const bomCached   = forceRefresh ? null : cacheGet('bom');
-    const convCached  = forceRefresh ? null : cacheGet('orderConv',   10 * 60 * 1000);
     const vgCached    = forceRefresh ? null : cacheGet('vendorGroup', 10 * 60 * 1000);
     const itemsCached = forceRefresh ? null : cacheGet('orderItems',  10 * 60 * 1000);
 
     // ── 全部分頁同時平行發請求（consumption / stockUpdate 改為 lazy load）──
-    const [invRows, purchRows, delivRows, bomRows, convRows, vgRows, itemRows] = await Promise.all([
+    const [invRows, bomRows, vgRows, itemRows] = await Promise.all([
       fetchTab('inventory'),
-      fetchTab('purchase'),
-      fetchTab('delivery'),
       bomCached
         ? Promise.resolve(bomCached)
         : fetchTab('bom').then(r => { if(r.length) cacheSet('bom', r); return r; }),
-      convCached
-        ? Promise.resolve(convCached)
-        : fetchTab('orderConv').then(r => { if(r.length) cacheSet('orderConv', r); return r; }),
       vgCached
         ? Promise.resolve(vgCached)
         : fetchTab('vendorGroup').then(r => { if(r.length) cacheSet('vendorGroup', r); return r; }),
@@ -1387,12 +1385,14 @@ async function syncAll(forceRefresh) {
 
     const normInv = invRows.map(r => { const n={}; Object.keys(r).forEach(k=>{ n[k.trim()] = typeof r[k]==='string'?r[k].trim():r[k]; }); return n; });
     D.inventory   = normInv;   F.inventory   = [...normInv];
-    D.purchase    = purchRows; F.purchase    = [...purchRows];
-    D.delivery    = delivRows; F.delivery    = [...delivRows];
-    // consumption / stockUpdate 改 lazy load：強制刷新時清空，讓下次切頁重抓
-    if (forceRefresh) { D.consumption = []; F.consumption = []; D.stockUpdate = []; F.stockUpdate = []; }
+    // purchase / delivery / consumption / stockUpdate 改 lazy load：強制刷新時清空，讓下次切頁重抓
+    if (forceRefresh) {
+      D.purchase = []; F.purchase = [];
+      D.delivery = []; F.delivery = [];
+      D.consumption = []; F.consumption = [];
+      D.stockUpdate = []; F.stockUpdate = [];
+    }
     D.bom         = bomRows;
-    D.orderConv   = convRows;
 
     // 叫貨廠商快取（同步時一次建好，ordRender 不需再 fetch）
     if (vgRows.length || itemRows.length) {
@@ -1406,13 +1406,23 @@ async function syncAll(forceRefresh) {
         if (row['廠商名稱']) gasTpl[row['廠商名稱']] = { header: String(row['開頭']||''), footer: String(row['結尾']||'') };
       });
       const sheetItems = itemRows
-        .filter(r => r['食材名稱'])
-        .map((r, i) => ({
-          id: 9000 + i,
-          name: String(r['食材名稱']).trim(),
-          vendor: String(r['廠商名稱']||'').trim(),
-          unit: String(r['單位']||'').trim(),
-          defaultQty: parseInt(r['預設數量']) || 1,
+        .filter(r => r['品項名稱'] && r['廠商名稱'] && String(r['啟用']||'').toUpperCase() !== 'FALSE')
+        .map((r, idx) => ({
+          id:       9000 + idx,
+          name:     String(r['品項名稱']).trim(),
+          vendor:   String(r['廠商名稱']||'').trim(),
+          qty:      parseFloat(r['預設數量']) || 1,
+          unit:     String(r['叫貨單位']||'').trim(),
+          spec:     String(r['規格']||'').trim(),
+          needDate: String(r['需到貨日期']||'').toUpperCase() === 'TRUE',
+          invCode:  String(r['庫存編號']||'').trim(),
+          invUnit:  String(r['庫存單位']||'').trim(),
+          rcvName:  String(r['進貨商品名稱']||'').trim(),
+          rcvWh:    String(r['倉庫']||'').trim(),
+          rcvUnit:  String(r['進貨單位']||'').trim(),
+          factor:   parseFloat(r['換算係數']) || 1,
+          transfer: String(r['是否轉庫']||'').toUpperCase() === 'TRUE',
+          beef:     String(r['是否牛肉']||'').toUpperCase() === 'TRUE',
         }));
       window._ordVendorSortMap = sortMap;
       window._ordGasTpl = gasTpl;
@@ -1422,11 +1432,6 @@ async function syncAll(forceRefresh) {
 
     // 庫存寫入快取供下次秒顯示
     if (invRows.length) cacheSet('inventory', invRows);
-
-    // 更新進貨紀錄食材名稱下拉選單
-    const plNames = [...new Set(purchRows.map(r=>r['食材名稱']).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
-    const plQ = g('pl-q');
-    if(plQ){ const cur=plQ.value; plQ.innerHTML='<option value="">全部食材名稱</option>'+plNames.map(n=>`<option value="${n}">${n}</option>`).join(''); if(cur) plQ.value=cur; }
 
     buildDropdowns();
     filterInv(); // 套用預設 195 篩選（Q2）
@@ -1449,8 +1454,8 @@ async function syncAll(forceRefresh) {
 }
 
 function renderAll() {
-  renderInv(); renderPL(); renderDL();
-  // renderCo / renderSU 改 lazy load，不在 syncAll 時呼叫
+  renderInv();
+  // purchase / delivery / consumption / stockUpdate 全改 lazy load，不在 syncAll 時呼叫
 }
 
 // ── Lazy load：使用量紀錄（只抓最新 100 筆）──────────────
@@ -1489,6 +1494,44 @@ async function loadStockUpdate() {
     g('su-body').innerHTML = `<tr><td colspan="5" style="color:var(--danger);padding:16px">載入失敗：${escHtml(e.message)}</td></tr>`;
   }
   _suLoading = false;
+}
+
+// ── Lazy load：進貨/生產紀錄（只抓最新 200 筆）────────────
+let _plLoading = false;
+async function loadPurchaseLog() {
+  if (D.purchase.length) { filterPL(); return; }
+  if (_plLoading) return;
+  _plLoading = true;
+  g('pl-body').innerHTML = '<tr><td colspan="7" class="loading"><div class="spin"></div>載入最近 200 筆...</td></tr>';
+  try {
+    const rows = await fetchTab('purchase', true, 200);
+    D.purchase = rows; F.purchase = [...rows];
+    // 建立食材名稱下拉
+    const names = [...new Set(rows.map(r => r['食材名稱']).filter(Boolean))].sort((a,b) => a.localeCompare(b,'zh-Hant'));
+    const plQ = g('pl-q');
+    if (plQ) { const cur=plQ.value; plQ.innerHTML='<option value="">全部食材名稱</option>'+names.map(n=>`<option value="${n}">${n}</option>`).join(''); if(cur) plQ.value=cur; }
+    filterPL();
+  } catch(e) {
+    g('pl-body').innerHTML = `<tr><td colspan="7" style="color:var(--danger);padding:16px">載入失敗：${escHtml(e.message)}</td></tr>`;
+  }
+  _plLoading = false;
+}
+
+// ── Lazy load：配送紀錄（只抓最新 200 筆）────────────────
+let _dlLoading = false;
+async function loadDeliveryLog() {
+  if (D.delivery.length) { filterDL(); return; }
+  if (_dlLoading) return;
+  _dlLoading = true;
+  g('dl-body').innerHTML = '<tr><td colspan="7" class="loading"><div class="spin"></div>載入最近 200 筆...</td></tr>';
+  try {
+    const rows = await fetchTab('delivery', true, 200);
+    D.delivery = rows; F.delivery = [...rows];
+    filterDL();
+  } catch(e) {
+    g('dl-body').innerHTML = `<tr><td colspan="7" style="color:var(--danger);padding:16px">載入失敗：${escHtml(e.message)}</td></tr>`;
+  }
+  _dlLoading = false;
 }
 
 // ═══════════════════════════════════════
@@ -1544,18 +1587,6 @@ function buildDropdowns() {
     coQ.innerHTML = '<option value="">全部商品名稱</option>' +
       uniqueNames.map(n=>`<option value="${n}">${n}</option>`).join('');
     if(cur) coQ.value = cur;
-  }
-
-  // 進貨/生產紀錄食材名稱下拉
-  const plNames = [...new Set(
-    D.purchase.map(r => r['食材名稱']).filter(Boolean)
-  )].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
-  const plQ = g('pl-q');
-  if(plQ) {
-    const cur = plQ.value;
-    plQ.innerHTML = '<option value="">全部食材名稱</option>' +
-      plNames.map(n=>`<option value="${n}">${n}</option>`).join('');
-    if(cur) plQ.value = cur;
   }
 
   // 每日食材使用預設倉庫 195（只在第一次未選時自動選）
@@ -3251,6 +3282,8 @@ async function ordRender() {
   // 廠商排序 + 廠商訊息設定 + 叫貨品項：只在第一次或強制刷新時抓
   let vendorSortMap = {};
   if (!window._ordVendorCacheLoaded) {
+    const ordBody = g('ord-body');
+    if (ordBody) ordBody.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><div class="spin"></div><div style="margin-top:8px;font-size:13px">載入叫貨清單...</div></div>';
     try {
       const [vgRes, itemsRes] = await Promise.all([
         fetch(API + '?tab=vendorGroup&secret=' + API_SECRET),
@@ -3273,10 +3306,10 @@ async function ordRender() {
       window._ordVendorSortMap = sortMap;
       window._ordGasTpl = gasTpl;
 
-      // 從「叫貨品項設定」動態建立 ORDER_ITEMS（廠商名稱有填才載入）
+      // 從「叫貨品項設定」動態建立品項（廠商名稱有填才載入）
       const sheetItems = (itemsData.rows || []).filter(r =>
         r['品項名稱'] && r['廠商名稱'] &&
-        String(r['啟用']).toUpperCase() !== 'FALSE'
+        String(r['啟用']||'').toUpperCase() !== 'FALSE'
       );
       if (sheetItems.length > 0) {
         window._ordSheetItems = sheetItems.map((r, idx) => ({
@@ -3286,14 +3319,22 @@ async function ordRender() {
           qty:      parseFloat(r['預設數量']) || 1,
           unit:     String(r['叫貨單位'] || ''),
           spec:     String(r['規格'] || ''),
-          needDate: String(r['需到貨日期']).toUpperCase() === 'TRUE',
+          needDate: String(r['需到貨日期']||'').toUpperCase() === 'TRUE',
           invCode:  String(r['庫存編號'] || ''),
-          transfer: String(r['是否轉庫']).toUpperCase() === 'TRUE',
-          beef:     String(r['是否牛肉']).toUpperCase() === 'TRUE',
+          invUnit:  String(r['庫存單位'] || ''),
+          rcvName:  String(r['進貨商品名稱'] || ''),
+          rcvWh:    String(r['倉庫'] || ''),
+          rcvUnit:  String(r['進貨單位'] || ''),
+          factor:   parseFloat(r['換算係數']) || 1,
+          transfer: String(r['是否轉庫']||'').toUpperCase() === 'TRUE',
+          beef:     String(r['是否牛肉']||'').toUpperCase() === 'TRUE',
         }));
       }
       window._ordVendorCacheLoaded = true;
-    } catch(e) {}
+    } catch(e) {
+      if (ordBody) ordBody.innerHTML = `<div style="text-align:center;padding:40px;color:var(--danger);font-size:13px">載入失敗：${escHtml(e.message)}<br><button class="btn sm" style="margin-top:12px" onclick="window._ordVendorCacheLoaded=false;ordRender()">重試</button></div>`;
+      return;
+    }
   }
   vendorSortMap = window._ordVendorSortMap || {};
   // 優先用 Sheet 品項，Sheet 未載入則 fallback 到硬編碼
@@ -3811,27 +3852,20 @@ async function ordLinkReceive(checkedItems, vdates, ordUser) {
   const xferRaw = checkedItems.filter(ci => isTransferItem(ci.item.name));
   const rcvRaw  = checkedItems.filter(ci => !isTransferItem(ci.item.name));
 
-  // 使用同步快取的叫貨進貨對照表（syncAll 已預先載入，不再額外 GET）
-  let convRows = [], convErr = '';
-  try {
-    convRows = (D.orderConv || []).map(r => {
-      const n = {};
-      Object.keys(r).forEach(k => { n[k.trim()] = typeof r[k] === 'string' ? r[k].trim() : r[k]; });
-      return n;
-    });
-  } catch(e) { convErr = e.message; }
+  // 使用 syncAll 預先載入的叫貨品項設定（含換算係數、進貨商品名稱等欄位）
+  const convRows = window._ordSheetItems || [];
 
   // ── 進貨品項換算 ──
   let receiveItems = [];
   try {
     let uid = 0;
     for (const { item, qty, invCode } of rcvRaw) {
-      const conv = convRows.filter(r => String(r['品項名稱']||'').trim() === item.name);
+      const conv = convRows.filter(r => r.name === item.name);
       if (conv.length > 0) {
         for (const c of conv) {
-          const factor = parseFloat(String(c['換算係數']||'1').replace(',','')) || 1;
-          const rCode  = String(c['庫存編號']||invCode||'');
-          receiveItems.push({ id:'ri_'+(uid++), name:String(c['進貨商品名稱']||item.name), invCode:rCode, wh:String(c['倉庫']||_invCodeToWh(rCode)), unit:String(c['進貨單位']||item.invUnit||item.unit), qty:parseFloat((qty*factor).toFixed(4)), include:!!rCode });
+          const factor = c.factor || 1;
+          const rCode  = c.invCode || invCode || '';
+          receiveItems.push({ id:'ri_'+(uid++), name:c.rcvName || item.name, invCode:rCode, wh:c.rcvWh || _invCodeToWh(rCode), unit:c.rcvUnit || c.invUnit || item.unit, qty:parseFloat((qty*factor).toFixed(4)), include:!!rCode });
         }
       } else if (item.beef) {
         receiveItems.push({ id:'ri_'+(uid++), name:item.name, invCode, wh:_invCodeToWh(invCode), unit:'KG', qty:parseFloat((qty*15).toFixed(2)), include:!!invCode });
@@ -4098,7 +4132,9 @@ function filterMatLog() {
     if (tp && r['類型'] !== tp) return false;
     return true;
   });
-  _matLogPage = 1; renderMatLog();
+  _matLogPage = 1;
+  _renderScSummary(_matLogAll, 'mat-log-summary', ['使用量']);
+  renderMatLog();
 }
 function filterEquipLog() {
   const df = gv('equip-log-df'), dt = gv('equip-log-dt'), tp = gv('equip-log-type');
@@ -4109,7 +4145,48 @@ function filterEquipLog() {
     if (tp && r['類型'] !== tp) return false;
     return true;
   });
-  _equipLogPage = 1; renderEquipLog();
+  _equipLogPage = 1;
+  _renderScSummary(_equipLogAll, 'equip-log-summary', ['遺失','報廢','破損']);
+  renderEquipLog();
+}
+
+// ── 統計彙總（依品項加總，僅統計消耗性類型）──────────
+function _renderScSummary(rows, summaryId, adjTypes) {
+  const el = g(summaryId);
+  if (!el) return;
+  // 只統計消耗性類型（排除進貨）
+  const adjRows = rows.filter(r => adjTypes.includes(r['類型']));
+  if (!adjRows.length) { el.style.display = 'none'; return; }
+
+  // 依品項名稱 + 類型分組加總
+  const map = {};
+  for (const r of adjRows) {
+    const name = String(r['名稱'] || '');
+    const type = String(r['類型'] || '');
+    const unit = String(r['單位'] || '');
+    const qty  = parseFloat(r['變動數量']) || 0;
+    const key  = name + '||' + type;
+    if (!map[key]) map[key] = { name, type, unit, total: 0 };
+    map[key].total += qty;
+  }
+  const items = Object.values(map).sort((a,b) => a.name.localeCompare(b.name,'zh-Hant'));
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;letter-spacing:.05em">
+      📊 期間合計（${adjRows.length} 筆）
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${items.map(i => `
+        <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r2);padding:6px 12px;min-width:130px">
+          <div style="font-size:12px;font-weight:600;color:var(--text)">${escHtml(i.name)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">
+            <span class="badge gray" style="font-size:10px">${escHtml(i.type)}</span>
+            <span style="font-size:14px;font-weight:700;color:var(--accent);margin-left:6px">${i.total}</span>
+            <span style="margin-left:2px">${escHtml(i.unit)}</span>
+          </div>
+        </div>`).join('')}
+    </div>`;
 }
 function renderMatLog()   { _renderScLog(_matLogAll,   'mat-log-body',   'mat-log-pgn',   _matLogPage,   p=>{ _matLogPage=p; renderMatLog(); }); }
 function renderEquipLog() { _renderScLog(_equipLogAll, 'equip-log-body', 'equip-log-pgn', _equipLogPage, p=>{ _equipLogPage=p; renderEquipLog(); }); }

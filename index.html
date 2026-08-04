@@ -386,6 +386,11 @@ label .req-star{font-size:12px}
 #sync-progress{position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;pointer-events:none}
 #sync-progress-bar{height:100%;width:0;background:var(--accent);transition:width .25s ease;border-radius:0 2px 2px 0}
 #sync-progress-bar.err{background:var(--danger,#e74c3c)}
+/* 統計列 */
+.stats-bar{display:flex;flex-wrap:wrap;gap:6px 16px;padding:8px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:10px;font-size:13px;color:var(--text2);align-items:center}
+.stats-bar .s-item{display:flex;align-items:center;gap:5px}
+.stats-bar .s-val{font-weight:700;color:var(--text);font-family:var(--mono)}
+.stats-bar .s-div{color:var(--border2)}
 /* 中央載入卡片 */
 #sync-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9998;pointer-events:none;opacity:0;transition:opacity .3s}
 #sync-overlay.show{opacity:1;pointer-events:auto}
@@ -735,6 +740,7 @@ label .req-star{font-size:12px}
         <input type="date" id="pl-dt" onchange="filterPL()">
         <button class="btn sm" onclick="openRevertModal('purchase')" style="margin-left:auto">↩ 庫存復原</button>
       </div>
+      <div id="pl-stats" style="display:none"></div>
       <div class="tw">
         <table class="dt">
           <thead>
@@ -754,6 +760,7 @@ label .req-star{font-size:12px}
         <input type="date" id="dl-dt" onchange="filterDL()">
         <button class="btn sm" onclick="openRevertModal('delivery')" style="margin-left:auto">↩ 庫存復原</button>
       </div>
+      <div id="dl-stats" style="display:none"></div>
       <div class="tw">
         <table class="dt">
           <thead>
@@ -2537,6 +2544,34 @@ function filterPL() {
     if(dt && d>dt) return false;
     return true;
   }); // GAS v2.3 已在伺服器端倒序，無需再 reverse
+
+  // 統計
+  const statsEl = g('pl-stats');
+  if (statsEl) {
+    if (F.purchase.length === 0) {
+      statsEl.style.display = 'none';
+    } else {
+      let rcvCount=0, rcvQty=0, prdCount=0, prdQty=0, otherCount=0, otherQty=0;
+      F.purchase.forEach(r => {
+        const type = r['進貨&生産']||r['進貨&生產']||'';
+        const qty  = parseFloat(r['進貨/生產數量']??r['數量']??0) || 0;
+        if (type==='進貨')      { rcvCount++; rcvQty+=qty; }
+        else if (type==='生產') { prdCount++; prdQty+=qty; }
+        else                    { otherCount++; otherQty+=qty; }
+      });
+      const total = F.purchase.length;
+      let html = `<div class="stats-bar">
+        <div class="s-item">共 <span class="s-val">${total}</span> 筆</div>
+        <span class="s-div">｜</span>`;
+      if (rcvCount>0)   html += `<div class="s-item">進貨 <span class="s-val">${rcvCount}</span> 筆，總量 <span class="s-val">${fmtQty(rcvQty)}</span></div>`;
+      if (prdCount>0)   { if(rcvCount>0) html+=`<span class="s-div">·</span>`; html += `<div class="s-item">生產 <span class="s-val">${prdCount}</span> 筆，總量 <span class="s-val">${fmtQty(prdQty)}</span></div>`; }
+      if (otherCount>0) { html+=`<span class="s-div">·</span>`; html += `<div class="s-item">其他 <span class="s-val">${otherCount}</span> 筆，總量 <span class="s-val">${fmtQty(otherQty)}</span></div>`; }
+      html += `</div>`;
+      statsEl.innerHTML = html;
+      statsEl.style.display = '';
+    }
+  }
+
   PG.purchase=1; renderPL();
 }
 
@@ -2576,6 +2611,35 @@ function filterDL() {
     if(dt && d>dt) return false;
     return true;
   }); // GAS v2.3 已在伺服器端倒序
+
+  // 統計
+  const statsEl = g('dl-stats');
+  if (statsEl) {
+    if (F.delivery.length === 0) {
+      statsEl.style.display = 'none';
+    } else {
+      let totalQty = 0, itemCount = 0;
+      const whMap = {}; // 轉入倉庫 → 總量
+      F.delivery.forEach(r => {
+        const qty = parseFloat(r['數量']||0) || 0;
+        totalQty += qty; itemCount++;
+        const toWh = r['轉入倉庫代號']||r['入庫倉庫']||'';
+        if (toWh) whMap[toWh] = (whMap[toWh]||0) + qty;
+      });
+      let whHtml = Object.entries(whMap)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([wh,qty])=>`<div class="s-item">${wh} <span class="s-val">${fmtQty(qty)}</span></div>`)
+        .join('<span class="s-div">·</span>');
+      statsEl.innerHTML = `<div class="stats-bar">
+        <div class="s-item">共 <span class="s-val">${itemCount}</span> 筆品項</div>
+        <span class="s-div">｜</span>
+        <div class="s-item">總配送量 <span class="s-val">${fmtQty(totalQty)}</span></div>
+        ${Object.keys(whMap).length>1 ? `<span class="s-div">｜</span>${whHtml}` : ''}
+      </div>`;
+      statsEl.style.display = '';
+    }
+  }
+
   PG.delivery=1; renderDL();
 }
 

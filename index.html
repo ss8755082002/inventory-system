@@ -386,15 +386,27 @@ label .req-star{font-size:12px}
 #sync-progress{position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;pointer-events:none}
 #sync-progress-bar{height:100%;width:0;background:var(--accent);transition:width .25s ease;border-radius:0 2px 2px 0}
 #sync-progress-bar.err{background:var(--danger,#e74c3c)}
-#sync-progress-label{position:fixed;top:5px;right:10px;font-size:10px;font-family:var(--mono);color:var(--accent);z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
-#sync-progress-label.show{opacity:1}
-#sync-progress-label.err{color:var(--danger,#e74c3c)}
-#sync-progress-label.retry{pointer-events:auto;cursor:pointer;text-decoration:underline}
+/* 中央載入卡片 */
+#sync-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9998;pointer-events:none;opacity:0;transition:opacity .3s}
+#sync-overlay.show{opacity:1;pointer-events:auto}
+#sync-overlay-card{background:rgba(30,30,30,.88);color:#fff;border-radius:18px;padding:28px 36px;text-align:center;min-width:200px;max-width:80vw;backdrop-filter:blur(6px);box-shadow:0 8px 32px rgba(0,0,0,.35)}
+#sync-overlay-spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+#sync-overlay-text{font-size:16px;font-weight:500;letter-spacing:.02em;line-height:1.5}
+#sync-overlay-sub{font-size:12px;color:rgba(255,255,255,.5);margin-top:4px}
+#sync-overlay-btn{display:none;margin-top:16px;padding:10px 24px;background:var(--accent,#4a7c59);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;width:100%}
+#sync-overlay-btn.show{display:block}
 </style>
 </head>
 <body>
 <div id="sync-progress"><div id="sync-progress-bar"></div></div>
-<div id="sync-progress-label"></div>
+<div id="sync-overlay">
+  <div id="sync-overlay-card">
+    <div id="sync-overlay-spinner"></div>
+    <div id="sync-overlay-text"></div>
+    <div id="sync-overlay-sub"></div>
+    <button id="sync-overlay-btn" onclick="syncAll(true)">點此重試 ↻</button>
+  </div>
+</div>
 <div class="app">
 
 <!-- ══ Drawer overlay (tablet/mobile) ══ -->
@@ -1360,32 +1372,49 @@ function cacheClear() {
 let _slowTimers = [];
 function _spShow() {
   _slowTimers.forEach(t => clearTimeout(t)); _slowTimers = [];
-  const bar = g('sync-progress-bar'), lbl = g('sync-progress-label');
+  const bar = g('sync-progress-bar');
   if (bar) { bar.style.width = '0%'; bar.classList.remove('err'); }
-  if (lbl) { lbl.textContent = ''; lbl.classList.remove('err','show','retry'); lbl.onclick = null; lbl.style.pointerEvents = ''; }
+  const ov = g('sync-overlay');
+  if (ov) ov.classList.remove('show');
+  const btn = g('sync-overlay-btn');
+  if (btn) btn.classList.remove('show');
 }
-function _spSet(pct, label, isErr) {
-  const bar = g('sync-progress-bar'), lbl = g('sync-progress-label');
-  if (bar) { bar.style.width = pct + '%'; if (isErr) bar.classList.add('err'); }
-  if (lbl) { lbl.textContent = label; lbl.classList.toggle('err', !!isErr); lbl.classList.add('show'); }
+function _spSet(pct, label) {
+  const bar = g('sync-progress-bar');
+  if (bar) bar.style.width = pct + '%';
+}
+function _spOverlay(text, sub, isErr) {
+  const ov   = g('sync-overlay');
+  const txt  = g('sync-overlay-text');
+  const subEl= g('sync-overlay-sub');
+  const sp   = g('sync-overlay-spinner');
+  const btn  = g('sync-overlay-btn');
+  const bar  = g('sync-progress-bar');
+  if (txt)  txt.textContent  = text;
+  if (subEl) subEl.textContent = sub || '';
+  if (sp)   sp.style.display = isErr ? 'none' : 'block';
+  if (bar && isErr) bar.classList.add('err');
+  if (btn)  btn.classList.toggle('show', !!isErr);
+  if (ov)   ov.classList.add('show');
 }
 function _spDone() {
   _slowTimers.forEach(t => clearTimeout(t)); _slowTimers = [];
-  const bar = g('sync-progress-bar'), lbl = g('sync-progress-label');
+  const bar = g('sync-progress-bar');
   if (bar) bar.style.width = '100%';
-  setTimeout(() => {
-    if (bar) bar.style.width = '0%';
-    if (lbl) { lbl.classList.remove('show','retry'); lbl.onclick = null; }
-  }, 800);
+  const ov = g('sync-overlay');
+  if (ov) ov.classList.remove('show');
+  setTimeout(() => { if (bar) bar.style.width = '0%'; }, 800);
 }
 function _spStartSlowTimers() {
   _slowTimers.push(setTimeout(() => {
-    const lbl = g('sync-progress-label');
-    if (lbl && !lbl.classList.contains('err')) { lbl.textContent = '伺服器啟動中...'; lbl.classList.add('show'); }
+    const ov = g('sync-overlay');
+    if (ov && !ov.querySelector('#sync-overlay-btn.show'))
+      _spOverlay('伺服器啟動中...', '請稍候，系統正在喚醒');
   }, 6000));
   _slowTimers.push(setTimeout(() => {
-    const lbl = g('sync-progress-label');
-    if (lbl && !lbl.classList.contains('err')) lbl.textContent = '重新連結中...';
+    const ov = g('sync-overlay');
+    if (ov && !ov.querySelector('#sync-overlay-btn.show'))
+      _spOverlay('重新連結中...', '網路較慢，仍在嘗試');
   }, 12000));
 }
 
@@ -1501,14 +1530,9 @@ async function syncAll(forceRefresh) {
 
   } catch(err) {
     _slowTimers.forEach(t => clearTimeout(t)); _slowTimers = [];
-    const lbl = g('sync-progress-label');
-    if (lbl) {
-      lbl.textContent = '載入失敗，點此重試 ↻';
-      lbl.classList.add('err','show','retry');
-      lbl.onclick = () => syncAll(true);
-    }
     const bar = g('sync-progress-bar');
     if (bar) { bar.style.width = '100%'; bar.classList.add('err'); }
+    _spOverlay('載入失敗', '請點下方按鈕重新嘗試', true);
     g('sync-info').textContent = '同步失敗';
     toast('同步失敗：' + err.message, 'err');
     console.error('[syncAll]', err);

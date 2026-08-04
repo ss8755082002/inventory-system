@@ -1472,8 +1472,8 @@ async function syncAll(forceRefresh) {
     D.inventory   = normInv;   F.inventory   = [...normInv];
     // purchase / delivery / consumption / stockUpdate 改 lazy load：強制刷新時清空，讓下次切頁重抓
     if (forceRefresh) {
-      D.purchase = []; F.purchase = [];
-      D.delivery = []; F.delivery = [];
+      D.purchase = []; F.purchase = []; _plFull = false;
+      D.delivery = []; F.delivery = []; _dlFull = false;
       D.consumption = []; F.consumption = []; _coFull = false;
       D.stockUpdate = []; F.stockUpdate = []; _suFull = false;
     }
@@ -1622,6 +1622,7 @@ async function _loadStockUpdateFull() {
 
 // ── Lazy load：進貨/生產紀錄（只抓最新 200 筆）────────────
 let _plLoading = false;
+let _plFull = false;
 async function loadPurchaseLog() {
   if (D.purchase.length) { filterPL(); return; }
   if (_plLoading) return;
@@ -1630,7 +1631,7 @@ async function loadPurchaseLog() {
   try {
     const rows = await fetchTab('purchase', true, 200);
     D.purchase = rows; F.purchase = [...rows];
-    // 建立食材名稱下拉
+    _plFull = false;
     const names = [...new Set(rows.map(r => r['食材名稱']).filter(Boolean))].sort((a,b) => a.localeCompare(b,'zh-Hant'));
     const plQ = g('pl-q');
     if (plQ) { const cur=plQ.value; plQ.innerHTML='<option value="">全部食材名稱</option>'+names.map(n=>`<option value="${n}">${n}</option>`).join(''); if(cur) plQ.value=cur; }
@@ -1640,9 +1641,24 @@ async function loadPurchaseLog() {
   }
   _plLoading = false;
 }
+async function _loadPurchaseLogFull() {
+  if (_plFull || _plLoading) return;
+  _plLoading = true;
+  try {
+    const rows = await fetchTab('purchase', true, 0);
+    D.purchase = rows; F.purchase = [...rows];
+    _plFull = true;
+    const names = [...new Set(rows.map(r => r['食材名稱']).filter(Boolean))].sort((a,b) => a.localeCompare(b,'zh-Hant'));
+    const plQ = g('pl-q');
+    if (plQ) { const cur=plQ.value; plQ.innerHTML='<option value="">全部食材名稱</option>'+names.map(n=>`<option value="${n}">${n}</option>`).join(''); if(cur) plQ.value=cur; }
+    filterPL();
+  } catch(e) {}
+  _plLoading = false;
+}
 
 // ── Lazy load：配送紀錄（只抓最新 200 筆）────────────────
 let _dlLoading = false;
+let _dlFull = false;
 async function loadDeliveryLog() {
   if (D.delivery.length) { filterDL(); return; }
   if (_dlLoading) return;
@@ -1651,10 +1667,22 @@ async function loadDeliveryLog() {
   try {
     const rows = await fetchTab('delivery', true, 200);
     D.delivery = rows; F.delivery = [...rows];
+    _dlFull = false;
     filterDL();
   } catch(e) {
     g('dl-body').innerHTML = `<tr><td colspan="7" style="color:var(--danger);padding:16px">載入失敗：${escHtml(e.message)}</td></tr>`;
   }
+  _dlLoading = false;
+}
+async function _loadDeliveryLogFull() {
+  if (_dlFull || _dlLoading) return;
+  _dlLoading = true;
+  try {
+    const rows = await fetchTab('delivery', true, 0);
+    D.delivery = rows; F.delivery = [...rows];
+    _dlFull = true;
+    filterDL();
+  } catch(e) {}
   _dlLoading = false;
 }
 
@@ -2535,6 +2563,7 @@ function filterPL() {
   const tp = gv('pl-type');
   const df = gv('pl-df');
   const dt = gv('pl-dt');
+  if ((q || tp || df || dt) && !_plFull) _loadPurchaseLogFull();
   F.purchase = D.purchase.filter(r=>{
     if(q && (r['食材名稱']||'') !== q) return false;
     const type = r['進貨&生産']||r['進貨&生產']||'';
@@ -2603,6 +2632,7 @@ function filterDL() {
   const q  = gv('dl-q').toLowerCase();
   const df = gv('dl-df');
   const dt = gv('dl-dt');
+  if ((q || df || dt) && !_dlFull) _loadDeliveryLogFull();
   F.delivery = D.delivery.filter(r=>{
     const searchStr = `${r['配送人員']||''} ${r['製單人員']||''} ${r['轉出倉庫代號']||''} ${r['轉入倉庫代號']||''}`.toLowerCase();
     if(q && !searchStr.includes(q)) return false;

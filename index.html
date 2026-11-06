@@ -810,6 +810,7 @@ label .req-star{font-size:12px}
           <option value="195">195</option>
           <option value="317">317</option>
           <option value="大野">大野</option>
+          <option value="531">531</option>
         </select>
         <input type="date" id="su-df" onchange="filterSU()">
         <input type="date" id="su-dt" onchange="filterSU()">
@@ -1125,7 +1126,7 @@ let API = HARDCODED_API || localStorage.getItem('inv_api') || '';
 const PS = 100;
 const DAYS = ['日','一','二','三','四','五','六'];
 // 倉庫代碼清單（固定三個）
-const WH_CODES = ['195','317','大野'];
+const WH_CODES = ['195','317','大野','531'];
 
 // 台灣時間字串 yyyy-MM-dd HH:mm:ss
 function twTime() {
@@ -2334,7 +2335,7 @@ async function submitTransfer() {
     }
     const res = await post({ action:'appendDeliveryAndUpdateStock', data:{ rows, baseData:base }});
     toast(`配送單送出成功（${count} 筆），庫存已更新 ${res.updated||0} 項`,'ok');
-    const nWh = s => { const t=String(s||'').trim(); if(t.includes('195'))return'195'; if(t.includes('317'))return'317'; if(t.includes('大野'))return'大野'; return t; };
+    const nWh = s => { const t=String(s||'').trim(); if(t.includes('195'))return'195'; if(t.includes('317'))return'317'; if(t.includes('大野'))return'大野'; if(t.includes('531'))return'531'; return t; };
     for(const r of rows) {
       const qty = parseFloat(r['數量']||0); if(!qty) continue;
       const fromInv = D.inventory.find(i => String(i['庫存編號']||'').trim()===String(r['庫存編號']||'').trim());
@@ -2811,6 +2812,7 @@ function normalizeWh(raw) {
   if(s.includes('195')) return '195';
   if(s.includes('317')) return '317';
   if(s.includes('大野')) return '大野';
+  if(s.includes('531')) return '531';
   return s;
 }
 

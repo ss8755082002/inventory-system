@@ -1127,6 +1127,26 @@ const PS = 100;
 const DAYS = ['日','一','二','三','四','五','六'];
 // 倉庫代碼清單（固定三個）
 const WH_CODES = ['195','317','大野','531'];
+// 專用配送表單：出庫或入庫倉庫在此清單內時，配送清單的「品項與順序」一律依該倉庫的配送項次，
+// 且只列出「出庫、入庫兩邊都有庫存列」的品項（另一端沒有的不列入）。
+// 兩端都在清單內時以入庫倉庫為準；其餘倉庫維持原本「依出庫倉庫配送項次」邏輯。
+const TR_FORM_WH = ['531'];
+function trFormWh(from, to) {
+  if(!from || !to || from === to) return '';
+  if(TR_FORM_WH.includes(to)) return to;
+  if(TR_FORM_WH.includes(from)) return from;
+  return '';
+}
+function trDestRows(to) { // 指定倉庫的啟用品項，依其配送項次排序
+  return D.inventory
+    .filter(r => isActive(r) && String(r['庫存編號']||'').trim().startsWith(to + '-'))
+    .sort((a,b) => {
+      const ao = parseInt(a['配送項次'])||0, bo = parseInt(b['配送項次'])||0;
+      if(ao && bo) return ao - bo;
+      if(ao) return -1; if(bo) return 1;
+      return (parseInt(a['項次'])||999) - (parseInt(b['項次'])||999);
+    });
+}
 
 // 台灣時間字串 yyyy-MM-dd HH:mm:ss
 function twTime() {
@@ -2189,8 +2209,24 @@ function rebuildTransferList() {
   const to   = gv('tr-default-to');
   if(!from){ g('tr-body').innerHTML=`<tr><td colspan="9" class="empty-st">請先選擇出庫倉庫</td></tr>`; return; }
 
+  // 專用表單模式（出庫或入庫為 531）：品項/順序依 531 配送項次，庫存編號取出庫倉庫對應列，
+  // 且入庫倉庫也要有對應列才列入
+  const formWh = trFormWh(from, to);
+  const destMode = !!formWh;
+  const skipped = [];
+  let items;
+  if (destMode) {
+    items = [];
+    const findInv = id => D.inventory.find(r => isActive(r) && String(r['庫存編號']||'').trim() === id);
+    trDestRows(formWh).forEach(d => {
+      const did = String(d['庫存編號']).trim();
+      const suffix = did.slice(did.indexOf('-'));
+      const src = findInv(from + suffix), tgt = findInv(to + suffix);
+      if (src && tgt) items.push(src); else skipped.push(d['商品名稱']||did);
+    });
+  } else
   // 以倉庫代碼 or 倉庫名稱 比對，支援 195/317/大野
-  const items = D.inventory
+  items = D.inventory
     .filter(r => {
       if (!isActive(r)) return false;
       const code = String(r['倉庫代碼']||'').trim();
@@ -2225,7 +2261,7 @@ function rebuildTransferList() {
       <td class="r ${qc}">${fmtQty(qty)}</td>
       <td class="dim mono">${r['規格']||'—'}</td>
       <td class="mono">${r['庫存編號']||'—'}</td>
-      <td class="r mono dim">${r['項次']||i+1}</td>
+      <td class="r mono dim">${destMode ? i+1 : (r['項次']||i+1)}</td>
       <td>
         <select style="font-size:12px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px" data-role="from">
           <option value="${from}">${from}</option>
@@ -2238,7 +2274,8 @@ function rebuildTransferList() {
       </td>
       <td><button class="del-btn" title="從清單移除" onclick="removeTrRow('${r['庫存編號']}')">✕</button></td>
     </tr>`;
-  }).join('');
+  }).join('') + (destMode ? `<tr><td colspan="10" class="empty-st" style="text-align:left;font-size:12px">
+    ${formWh} 專用表單：依 ${formWh} 配送項次排序，共 ${items.length} 項。${skipped.length ? `以下 ${skipped.length} 項在 ${formWh===to ? from : to} 無庫存列，未列入（需要時請用「臨時新增品項」）：${skipped.join('、')}` : ''}</td></tr>` : '');
 }
 
 // Transfer extra rows
@@ -3081,7 +3118,16 @@ async function saveTrOrder() {
   if(saveBtn){ saveBtn.classList.add('loading'); saveBtn.textContent='儲存中...'; }
   try {
     const rows = [...document.querySelectorAll('#tr-body tr[id^="trr-"]')];
-    const items = rows.map((r,i) => ({ '庫存編號': r.id.replace('trr-',''), order: i+1 }));
+    const _from = gv('tr-default-from'), _to = gv('tr-default-to');
+    const _fw = trFormWh(_from, _to), _dest = !!_fw;
+    // 專用表單模式：順序寫回 531 列的配送項次，不動另一端倉庫（如 317）的順序
+    const mapId = id => _dest ? _fw + id.slice(id.indexOf('-')) : id;
+    const items = rows.map((r,i) => ({ '庫存編號': mapId(r.id.replace('trr-','')), order: i+1 }));
+    if (_dest) {
+      // 沿用原本已有的項次數字重新分配，避免與未顯示品項的項次重複
+      const cur = items.map(it => parseInt((D.inventory.find(r => r['庫存編號'] === it['庫存編號'])||{})['配送項次'])||0);
+      if (cur.every(v => v > 0)) { const sorted = [...cur].sort((a,b)=>a-b); items.forEach((it,i)=> it.order = sorted[i]); }
+    }
     await post({ action:'saveOrder', data:{ orderType:'tr', items } });
     items.forEach(item => {
       const inv = D.inventory.find(r => r['庫存編號'] === item['庫存編號']);
